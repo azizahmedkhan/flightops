@@ -1,0 +1,102 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASS:-postgres}
+      - POSTGRES_DB=${DB_NAME:-flightops}
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  retrieval-svc:
+    build: ./services/retrieval-svc
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8081:8081"]
+
+  comms-svc:
+    build: ./services/comms-svc
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+    ports: ["8083:8083"]
+
+  agent-svc:
+    build: ./services/agent-svc
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - RETRIEVAL_URL=http://retrieval-svc:8081
+      - COMMS_URL=http://comms-svc:8083
+      - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS:-false}
+    depends_on:
+      retrieval-svc:
+        condition: service_started
+      comms-svc:
+        condition: service_started
+    ports: ["8082:8082"]
+
+  ingest-svc:
+    build: ./services/ingest-svc
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8084:8084"]
+
+  gateway-api:
+    build: ./services/gateway-api
+    environment:
+      - AGENT_URL=http://agent-svc:8082
+      - RETRIEVAL_URL=http://retrieval-svc:8081
+      - COMMS_URL=http://comms-svc:8083
+      - INGEST_URL=http://ingest-svc:8084
+    depends_on:
+      agent-svc:
+        condition: service_started
+      retrieval-svc:
+        condition: service_started
+      comms-svc:
+        condition: service_started
+      ingest-svc:
+        condition: service_started
+    ports: ["8080:8080"]
+
+  web:
+    build: ./ui/web
+    depends_on:
+      gateway-api:
+        condition: service_started
+    ports: ["5173:5173"]
+
+volumes:
+  dbdata:

@@ -1,0 +1,3 @@
+flight_no,flight_date,origin,destination,sched_dep,sched_arr,status
+NZ123,2025-09-17,AKL,WLG,08:40,09:45,DELAYED
+NZ456,2025-09-17,AKL,CHC,10:15,11:35,ON_TIME
