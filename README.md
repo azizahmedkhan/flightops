@@ -1,3 +1,31 @@
+# FlightOps Copilot — Business Functionality
+
+**FlightOps Copilot** is an AI-powered assistant designed to help airlines manage **irregular operations (IRROPs)** such as delays, cancellations, and weather disruptions.  
+It combines **retrieval-augmented generation (RAG)**, **tool-using agents**, and **enterprise guardrails** to support both operations staff and customer service teams.
+
+### Key Business Use Cases
+- **Operational Decision Support**  
+  - Assess passenger and crew impact when a flight is delayed.  
+  - Generate rebooking options with estimated costs and customer experience scores.  
+  - Ground recommendations in official airline policies and safety SOPs.
+
+- **Customer Communication**  
+  - Draft empathetic and policy-compliant emails or SMS updates.  
+  - Ensure communications cite official policies and follow approved templates.  
+  - Redact sensitive data (PNRs, phone numbers, emails) before sending.
+
+- **Governance & Compliance**  
+  - Enforce “grounded answers only” — no advice without supporting policy citations.  
+  - Maintain full audit trails: model version, prompts, citations, and decisions.  
+  - Provide observability for token usage, latency, and guardrail rejections.
+
+- **Enterprise Integration Ready**  
+  - Microservices design for easy integration with airline systems (crew rostering, booking engines, customer messaging platforms).  
+  - Cloud-native and containerized, deployable on AWS (Fargate, RDS, Bedrock) or other environments.  
+  - Extensible agent framework for future tools (crew legality checks, cost impact models, weather feeds).
+
+---
+
 # FlightOps Copilot — IRROPs-in-a-Box
 
 A production-style, **agentic GenAI** demo tailored for airline operations (e.g., Air New Zealand) to showcase:
