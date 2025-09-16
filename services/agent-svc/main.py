@@ -39,7 +39,7 @@ def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
     with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT flight_no, origin, destination, sched_dep, sched_arr, status
+                SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
                 FROM flights
                 WHERE flight_no=%s AND flight_date=%s
             """, (flight_no, date))
@@ -47,30 +47,80 @@ def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
             if not row:
                 return {}
             return {"flight_no":row[0], "origin":row[1], "destination":row[2],
-                    "sched_dep":row[3], "sched_arr":row[4], "status":row[5]}
+                    "sched_dep":row[3], "sched_arr":row[4], "status":row[5], "tail_number":row[6]}
 
 def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
     with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
         with conn.cursor() as cur:
+            # Get passenger count and connection details
             cur.execute("""
-                SELECT COUNT(*)
+                SELECT COUNT(*), COUNT(CASE WHEN has_connection = 'TRUE' THEN 1 END)
                 FROM bookings
                 WHERE flight_no=%s AND flight_date=%s
             """, (flight_no, date))
-            pax = cur.fetchone()[0]
+            pax_data = cur.fetchone()
+            pax = pax_data[0]
+            connecting_pax = pax_data[1]
+            
+            # Get crew count and roles
             cur.execute("""
-                SELECT COUNT(*)
+                SELECT COUNT(*), STRING_AGG(DISTINCT crew_role, ', ')
                 FROM crew_roster
                 WHERE flight_no=%s AND flight_date=%s
             """, (flight_no, date))
-            crew = cur.fetchone()[0]
-    return {"passengers": pax, "crew": crew, "summary": f"{pax} passengers and {crew} crew affected."}
+            crew_data = cur.fetchone()
+            crew = crew_data[0]
+            crew_roles = crew_data[1] or "Unknown"
+            
+            # Get aircraft status
+            cur.execute("""
+                SELECT f.tail_number, a.status, a.current_location
+                FROM flights f
+                LEFT JOIN aircraft_status a ON f.tail_number = a.tail_number
+                WHERE f.flight_no=%s AND f.flight_date=%s
+            """, (flight_no, date))
+            aircraft_data = cur.fetchone()
+            aircraft_status = aircraft_data[1] if aircraft_data else "Unknown"
+            aircraft_location = aircraft_data[2] if aircraft_data else "Unknown"
+            
+    return {
+        "passengers": pax, 
+        "connecting_passengers": connecting_pax,
+        "crew": crew, 
+        "crew_roles": crew_roles,
+        "aircraft_status": aircraft_status,
+        "aircraft_location": aircraft_location,
+        "summary": f"{pax} passengers ({connecting_pax} with connections) and {crew} crew affected. Aircraft status: {aircraft_status} at {aircraft_location}."
+    }
+
+def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
+    """Get detailed crew information for a flight."""
+    with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT cr.crew_id, cr.crew_role, cd.crew_name, cd.duty_start_time, cd.max_duty_hours
+                FROM crew_roster cr
+                LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
+                WHERE cr.flight_no=%s AND cr.flight_date=%s
+                ORDER BY cr.crew_role
+            """, (flight_no, date))
+            crew_members = []
+            for row in cur.fetchall():
+                crew_members.append({
+                    "crew_id": row[0],
+                    "role": row[1],
+                    "name": row[2] or "Unknown",
+                    "duty_start": row[3] or "Unknown",
+                    "max_hours": row[4] or 0
+                })
+    return crew_members
 
 def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Generate rebooking options based on passenger count and route type."""
-    # Get passenger count
+    # Get passenger count and connection details
     impact = tool_impact_assessor(flight_no, date)
     pax_count = impact.get("passengers", 0)
+    connecting_pax = impact.get("connecting_passengers", 0)
     
     # Get flight details to determine route type
     flight = tool_flight_lookup(flight_no, date)
@@ -84,15 +134,21 @@ def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
     
     # Base option: Next available flight
     if is_domestic:
+        base_plan = "Rebook on next available NZ domestic service + meal voucher"
+        if connecting_pax > 0:
+            base_plan += f" (priority for {connecting_pax} connecting passengers)"
         options.append({
-            "plan": "Rebook on next available NZ domestic service + meal voucher",
+            "plan": base_plan,
             "cx_score": 0.85,
             "cost_estimate": 80 * pax_count,
             "notes": "Minimizes missed connections, domestic route"
         })
     else:
+        base_plan = "Rebook on next available NZ international service + meal voucher"
+        if connecting_pax > 0:
+            base_plan += f" (priority for {connecting_pax} connecting passengers)"
         options.append({
-            "plan": "Rebook on next available NZ international service + meal voucher",
+            "plan": base_plan,
             "cx_score": 0.82,
             "cost_estimate": 120 * pax_count,
             "notes": "International route, higher cost but better service"
@@ -115,13 +171,21 @@ def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
             "notes": "Low passenger count, premium service"
         })
     
-    # Third option: Flexible rebooking
-    options.append({
-        "plan": "Flexible rebooking within 48h + accommodation if needed",
-        "cx_score": 0.80,
-        "cost_estimate": 90 * pax_count,
-        "notes": "Balanced approach, good for mixed passenger needs"
-    })
+    # Third option: Flexible rebooking with connection protection
+    if connecting_pax > 0:
+        options.append({
+            "plan": f"Flexible rebooking within 48h + connection protection for {connecting_pax} passengers + accommodation if needed",
+            "cx_score": 0.80,
+            "cost_estimate": 90 * pax_count + 50 * connecting_pax,
+            "notes": "Balanced approach with connection protection"
+        })
+    else:
+        options.append({
+            "plan": "Flexible rebooking within 48h + accommodation if needed",
+            "cx_score": 0.80,
+            "cost_estimate": 90 * pax_count,
+            "notes": "Balanced approach, good for mixed passenger needs"
+        })
     
     return options[:3]  # Return top 3 options
 
@@ -149,6 +213,7 @@ def ask(body: Ask, request: Request):
 
             flight = tool_flight_lookup(fno, date)
             impact = tool_impact_assessor(fno, date)
+            crew_details = tool_crew_details(fno, date)
             options = tool_rebooking_options(fno, date)
             policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
 
@@ -159,6 +224,7 @@ def ask(body: Ask, request: Request):
             payload = {
                 "flight": flight,
                 "impact": impact,
+                "crew_details": crew_details,
                 "options": options,
                 "policy_citations": policy.get("citations", []),
             }
@@ -184,6 +250,7 @@ def draft_comms(body: Ask, request: Request):
         fno = body.flight_no or "NZ123"
         date = body.date or "2025-09-17"
         impact = tool_impact_assessor(fno, date)
+        crew_details = tool_crew_details(fno, date)
         options = tool_rebooking_options(fno, date)
         policy = tool_policy_grounder(q)
         if not ensure_grounded(policy.get("citations", [])):
@@ -193,6 +260,7 @@ def draft_comms(body: Ask, request: Request):
             "flight_no": fno, "date": date,
             "issue":"Weather-related delay",
             "impact_summary": impact["summary"],
+            "crew_summary": f"{len(crew_details)} crew members affected: {', '.join([c['role'] + ' (' + c['name'] + ')' for c in crew_details[:3]])}",
             "options_summary": "; ".join([o["plan"] for o in options]),
             "policy_citations": policy.get("citations", [])
         }

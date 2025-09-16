@@ -47,31 +47,54 @@ def parse_csv_files() -> Dict[str, int]:
     
     with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS, autocommit=True) as conn:
         with conn.cursor() as cur:
-            # Create tables
+            # Drop existing tables to recreate with new structure
+            cur.execute("DROP TABLE IF EXISTS flights CASCADE")
+            cur.execute("DROP TABLE IF EXISTS bookings CASCADE")
+            cur.execute("DROP TABLE IF EXISTS crew_roster CASCADE")
+            cur.execute("DROP TABLE IF EXISTS crew_details CASCADE")
+            cur.execute("DROP TABLE IF EXISTS aircraft_status CASCADE")
+            
+            # Create tables with new structure
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS flights(
+                CREATE TABLE flights(
                     flight_no TEXT,
                     flight_date TEXT,
                     origin TEXT,
                     destination TEXT,
-                    sched_dep TEXT,
-                    sched_arr TEXT,
+                    sched_dep_time TEXT,
+                    sched_arr_time TEXT,
+                    status TEXT,
+                    tail_number TEXT
+                );
+                CREATE TABLE bookings(
+                    flight_no TEXT,
+                    flight_date TEXT,
+                    pnr TEXT,
+                    passenger_name TEXT,
+                    has_connection TEXT,
+                    connecting_flight_no TEXT
+                );
+                CREATE TABLE crew_roster(
+                    flight_no TEXT,
+                    flight_date TEXT,
+                    crew_id TEXT,
+                    crew_role TEXT
+                );
+                CREATE TABLE crew_details(
+                    crew_id TEXT PRIMARY KEY,
+                    crew_name TEXT,
+                    duty_start_time TEXT,
+                    max_duty_hours INTEGER
+                );
+                CREATE TABLE aircraft_status(
+                    tail_number TEXT PRIMARY KEY,
+                    current_location TEXT,
                     status TEXT
-                );
-                CREATE TABLE IF NOT EXISTS bookings(
-                    flight_no TEXT,
-                    flight_date TEXT,
-                    pnr TEXT
-                );
-                CREATE TABLE IF NOT EXISTS crew_roster(
-                    flight_no TEXT,
-                    flight_date TEXT,
-                    crew_id TEXT
                 );
             """)
             
             # Load each CSV
-            for table_name in ["flights", "bookings", "crew_roster"]:
+            for table_name in ["flights", "bookings", "crew_roster", "crew_details", "aircraft_status"]:
                 path = f"{DATA_DIR}/csv/{table_name}.csv"
                 if os.path.exists(path):
                     with open(path, newline='') as f:
