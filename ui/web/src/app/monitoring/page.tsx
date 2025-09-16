@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 import { 
   Activity, 
@@ -134,23 +135,28 @@ export default function MonitoringPage() {
   const totalCount = serviceHealth.length
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen relative">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-black text-white relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-6">
             <div className="flex items-center space-x-3">
-              <Activity className="h-8 w-8 text-red-600" />
+              <div className="bg-white p-2 rounded-lg">
+                <Activity className="h-6 w-6 text-black" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">System Monitoring</h1>
-                <p className="text-sm text-gray-600">Monitor service health and performance metrics</p>
+                <h1 className="text-2xl font-bold">System Monitoring</h1>
+                <p className="text-sm text-gray-300">Monitor service health and performance metrics</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Link href="/" className="text-sm font-medium text-white hover:text-gray-200">
+                Back to Home
+              </Link>
               <button
                 onClick={checkAllServices}
                 disabled={checking}
-                className="flex items-center px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                className="flex items-center px-4 py-2 text-sm text-white hover:text-gray-200 border-2 border-gray-300 rounded-lg hover:bg-gray-800 disabled:opacity-50 font-semibold transition-colors"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${checking ? 'animate-spin' : ''}`} />
                 {checking ? 'Checking...' : 'Refresh'}
@@ -160,26 +166,26 @@ export default function MonitoringPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Service Health */}
           <div className="lg:col-span-2 space-y-6">
             {/* Overview */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Service Overview</h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <h2 className="text-xl font-bold text-black mb-6">Service Overview</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="text-center p-4 bg-green-50 rounded-lg border-2 border-green-200">
                   <div className="text-2xl font-bold text-green-600">{healthyCount}</div>
-                  <div className="text-sm text-green-600">Healthy</div>
+                  <div className="text-sm text-green-600 font-semibold">Healthy</div>
                 </div>
-                <div className="text-center p-4 bg-red-50 rounded-lg">
+                <div className="text-center p-4 bg-red-50 rounded-lg border-2 border-red-200">
                   <div className="text-2xl font-bold text-red-600">{totalCount - healthyCount}</div>
-                  <div className="text-sm text-red-600">Unhealthy</div>
+                  <div className="text-sm text-red-600 font-semibold">Unhealthy</div>
                 </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="text-center p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
                   <div className="text-2xl font-bold text-blue-600">{totalCount}</div>
-                  <div className="text-sm text-blue-600">Total</div>
+                  <div className="text-sm text-blue-600 font-semibold">Total</div>
                 </div>
               </div>
 
@@ -191,18 +197,18 @@ export default function MonitoringPage() {
             </div>
 
             {/* Service Details */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Service Details</h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <h2 className="text-xl font-bold text-black mb-6">Service Details</h2>
               
               <div className="space-y-4">
                 {serviceHealth.map((service, index) => (
-                  <div key={index} className={`p-4 rounded-lg border ${getStatusColor(service.status)}`}>
+                  <div key={index} className={`p-4 rounded-lg border-2 ${getStatusColor(service.status)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(service.status)}
-                        <h3 className="font-medium text-gray-900">{service.name}</h3>
+                        <h3 className="font-bold text-black">{service.name}</h3>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 font-semibold">
                         {service.responseTime && `${service.responseTime}ms`}
                       </div>
                     </div>
@@ -225,97 +231,97 @@ export default function MonitoringPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Service Icons */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Services</h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <h2 className="text-xl font-bold text-black mb-6">Services</h2>
               
               <div className="space-y-4">
-                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
                   <Server className="h-5 w-5 text-blue-600" />
                   <div>
-                    <p className="font-medium text-blue-900">Gateway API</p>
-                    <p className="text-sm text-blue-700">Port 8080</p>
+                    <p className="font-bold text-blue-900">Gateway API</p>
+                    <p className="text-sm text-blue-700 font-semibold">Port 8080</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg border-2 border-green-200">
                   <Activity className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="font-medium text-green-900">Agent Service</p>
-                    <p className="text-sm text-green-700">Port 8082</p>
+                    <p className="font-bold text-green-900">Agent Service</p>
+                    <p className="text-sm text-green-700 font-semibold">Port 8082</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg">
+                <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
                   <Search className="h-5 w-5 text-purple-600" />
                   <div>
-                    <p className="font-medium text-purple-900">Retrieval Service</p>
-                    <p className="text-sm text-purple-700">Port 8081</p>
+                    <p className="font-bold text-purple-900">Retrieval Service</p>
+                    <p className="text-sm text-purple-700 font-semibold">Port 8081</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg">
+                <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border-2 border-orange-200">
                   <MessageSquare className="h-5 w-5 text-orange-600" />
                   <div>
-                    <p className="font-medium text-orange-900">Comms Service</p>
-                    <p className="text-sm text-orange-700">Port 8083</p>
+                    <p className="font-bold text-orange-900">Comms Service</p>
+                    <p className="text-sm text-orange-700 font-semibold">Port 8083</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg">
+                <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg border-2 border-red-200">
                   <Upload className="h-5 w-5 text-red-600" />
                   <div>
-                    <p className="font-medium text-red-900">Ingest Service</p>
-                    <p className="text-sm text-red-700">Port 8084</p>
+                    <p className="font-bold text-red-900">Ingest Service</p>
+                    <p className="text-sm text-red-700 font-semibold">Port 8084</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <h2 className="text-xl font-bold text-black mb-6">Quick Actions</h2>
               
               <div className="space-y-3">
                 <button 
                   onClick={checkAllServices}
                   disabled={checking}
-                  className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 disabled:opacity-50"
+                  className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border-2 border-gray-200 disabled:opacity-50 font-semibold transition-colors"
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 inline ${checking ? 'animate-spin' : ''}`} />
                   Refresh All Services
                 </button>
-                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200">
+                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border-2 border-gray-200 font-semibold transition-colors">
                   View Detailed Logs
                 </button>
-                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200">
+                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border-2 border-gray-200 font-semibold transition-colors">
                   Export Health Report
                 </button>
-                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200">
+                <button className="w-full text-left p-3 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border-2 border-gray-200 font-semibold transition-colors">
                   Configure Alerts
                 </button>
               </div>
             </div>
 
             {/* System Info */}
-            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">System Info</h2>
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+              <h2 className="text-xl font-bold text-black mb-6">System Info</h2>
               
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Environment:</span>
-                  <span className="font-medium">Development</span>
+                  <span className="text-gray-600 font-semibold">Environment:</span>
+                  <span className="font-bold text-black">Development</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Version:</span>
-                  <span className="font-medium">1.0.0</span>
+                  <span className="text-gray-600 font-semibold">Version:</span>
+                  <span className="font-bold text-black">1.0.0</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Uptime:</span>
-                  <span className="font-medium">N/A</span>
+                  <span className="text-gray-600 font-semibold">Uptime:</span>
+                  <span className="font-bold text-black">N/A</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Last Deploy:</span>
-                  <span className="font-medium">N/A</span>
+                  <span className="text-gray-600 font-semibold">Last Deploy:</span>
+                  <span className="font-bold text-black">N/A</span>
                 </div>
               </div>
             </div>

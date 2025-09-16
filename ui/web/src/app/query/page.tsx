@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -96,71 +97,76 @@ export default function QueryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen relative">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-black text-white relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-6">
             <div className="flex items-center space-x-3">
-              <Plane className="h-8 w-8 text-blue-600" />
+              <div className="bg-white p-2 rounded-lg">
+                <Plane className="h-6 w-6 text-black" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Flight Query</h1>
-                <p className="text-sm text-gray-600">Ask questions about flight disruptions</p>
+                <h1 className="text-2xl font-bold">Flight Query</h1>
+                <p className="text-sm text-gray-300">Ask questions about flight disruptions</p>
               </div>
             </div>
+            <Link href="/" className="text-sm font-medium text-white hover:text-gray-200">
+              Back to Home
+            </Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Query Form */}
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Ask a Question</h2>
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+            <h2 className="text-xl font-bold text-black mb-6">Ask a Question</h2>
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Question
                 </label>
                 <textarea
                   {...register('question')}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
                   placeholder="What is the impact of the delay on NZ123 today?"
                 />
                 {errors.question && (
-                  <p className="mt-1 text-sm text-red-600">{errors.question.message}</p>
+                  <p className="mt-1 text-sm text-red-600 font-medium">{errors.question.message}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
                   <input
                     {...register('flight_no')}
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
                     placeholder="NZ123"
                   />
                   {errors.flight_no && (
-                    <p className="mt-1 text-sm text-red-600">{errors.flight_no.message}</p>
+                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.flight_no.message}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Date
                   </label>
                   <input
                     {...register('date')}
                     type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
                   />
                   {errors.date && (
-                    <p className="mt-1 text-sm text-red-600">{errors.date.message}</p>
+                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.date.message}</p>
                   )}
                 </div>
               </div>
@@ -168,16 +174,16 @@ export default function QueryPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-black text-white py-3 px-6 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-semibold transition-colors"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                     Processing...
                   </>
                 ) : (
                   <>
-                    <Search className="h-4 w-4 mr-2" />
+                    <Search className="h-5 w-5 mr-2" />
                     Ask Question
                   </>
                 )}
@@ -190,29 +196,31 @@ export default function QueryPage() {
             {response && (
               <>
                 {/* Flight Information */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Plane className="h-5 w-5 mr-2 text-blue-600" />
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                    <div className="bg-black p-2 rounded-lg mr-3">
+                      <Plane className="h-5 w-5 text-white" />
+                    </div>
                     Flight Information
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-sm text-gray-600">Flight</p>
-                      <p className="font-medium">{response.tools_payload.flight.flight_no}</p>
+                      <p className="text-sm text-gray-600 font-semibold">Flight</p>
+                      <p className="font-bold text-black">{response.tools_payload.flight.flight_no}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className="font-medium">{response.tools_payload.flight.status}</p>
+                      <p className="text-sm text-gray-600 font-semibold">Status</p>
+                      <p className="font-bold text-black">{response.tools_payload.flight.status}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Route</p>
-                      <p className="font-medium">
+                      <p className="text-sm text-gray-600 font-semibold">Route</p>
+                      <p className="font-bold text-black">
                         {response.tools_payload.flight.origin} → {response.tools_payload.flight.destination}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Schedule</p>
-                      <p className="font-medium">
+                      <p className="text-sm text-gray-600 font-semibold">Schedule</p>
+                      <p className="font-bold text-black">
                         {response.tools_payload.flight.sched_dep} - {response.tools_payload.flight.sched_arr}
                       </p>
                     </div>
@@ -220,49 +228,53 @@ export default function QueryPage() {
                 </div>
 
                 {/* Impact Assessment */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Users className="h-5 w-5 mr-2 text-orange-600" />
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                    <div className="bg-black p-2 rounded-lg mr-3">
+                      <Users className="h-5 w-5 text-white" />
+                    </div>
                     Impact Assessment
                   </h3>
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-4 bg-orange-50 rounded-lg">
-                      <p className="text-2xl font-bold text-orange-600">
+                    <div className="text-center p-4 bg-gray-100 rounded-lg border-2 border-gray-200">
+                      <p className="text-2xl font-bold text-black">
                         {response.tools_payload.impact.passengers}
                       </p>
-                      <p className="text-sm text-orange-600">Passengers</p>
+                      <p className="text-sm text-gray-600 font-semibold">Passengers</p>
                     </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">
+                    <div className="text-center p-4 bg-gray-100 rounded-lg border-2 border-gray-200">
+                      <p className="text-2xl font-bold text-black">
                         {response.tools_payload.impact.crew}
                       </p>
-                      <p className="text-sm text-blue-600">Crew Members</p>
+                      <p className="text-sm text-gray-600 font-semibold">Crew Members</p>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">{response.tools_payload.impact.summary}</p>
+                  <p className="text-sm text-gray-800 font-medium">{response.tools_payload.impact.summary}</p>
                 </div>
 
                 {/* Rebooking Options */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <DollarSign className="h-5 w-5 mr-2 text-green-600" />
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                    <div className="bg-black p-2 rounded-lg mr-3">
+                      <DollarSign className="h-5 w-5 text-white" />
+                    </div>
                     Rebooking Options
                   </h3>
                   <div className="space-y-3">
                     {response.tools_payload.options.map((option, index) => (
-                      <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                      <div key={index} className="p-4 border-2 border-gray-200 rounded-lg bg-gray-50">
                         <div className="flex justify-between items-start mb-2">
-                          <p className="font-medium text-gray-900">{option.plan}</p>
+                          <p className="font-bold text-black">{option.plan}</p>
                           <div className="flex items-center space-x-2">
-                            <span className="text-sm text-gray-600">
+                            <span className="text-sm text-black font-semibold">
                               CX: {(option.cx_score * 100).toFixed(0)}%
                             </span>
-                            <span className="text-sm text-gray-600">
+                            <span className="text-sm text-gray-600 font-semibold">
                               Cost: ${option.cost_estimate.toLocaleString()}
                             </span>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-600">{option.notes}</p>
+                        <p className="text-sm text-gray-700 font-medium">{option.notes}</p>
                       </div>
                     ))}
                   </div>
@@ -270,15 +282,17 @@ export default function QueryPage() {
 
                 {/* Policy Citations */}
                 {response.answer.citations.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                    <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                      <div className="bg-black p-2 rounded-lg mr-3">
+                        <CheckCircle className="h-5 w-5 text-white" />
+                      </div>
                       Policy Citations
                     </h3>
                     <div className="space-y-2">
                       {response.answer.citations.map((citation, index) => (
-                        <div key={index} className="p-3 bg-green-50 rounded-lg">
-                          <p className="text-sm text-gray-700">{citation}</p>
+                        <div key={index} className="p-3 bg-gray-100 rounded-lg border-2 border-gray-200">
+                          <p className="text-sm text-gray-800 font-medium">{citation}</p>
                         </div>
                       ))}
                     </div>
@@ -288,9 +302,11 @@ export default function QueryPage() {
             )}
 
             {!response && (
-              <div className="bg-white rounded-xl shadow-sm p-12 border border-gray-200 text-center">
-                <Search className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Submit a query to see results here</p>
+              <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-12 border-2 border-gray-200 text-center">
+                <div className="bg-black p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <Search className="h-8 w-8 text-white" />
+                </div>
+                <p className="text-gray-600 font-semibold">Submit a query to see results here</p>
               </div>
             )}
           </div>

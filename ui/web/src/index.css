@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Import Air NZ fonts */
+@import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;600&family=Roboto:wght@400;500&display=swap');
+
+/* Apply global styles using Air NZ brand colors */
+html, body, #__next {
+  @apply font-sans text-anr-dark bg-anr-light min-h-screen;
+}
+
+/* Ensure headings use the brand weight */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-semibold;
+}

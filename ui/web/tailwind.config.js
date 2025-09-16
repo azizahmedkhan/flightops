@@ -8,6 +8,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Air New Zealand brand colors
+        "anr-primary": "#0066B3",   // deep blue
+        "anr-accent": "#FF6600",    // vibrant orange
+        "anr-light": "#F5F5F5",     // light gray background
+        "anr-dark": "#212B36",      // dark text/footers
+        "anr-success": "#009B77",
+        "anr-warning": "#FFB81C",
+        "anr-error": "#D50000",
+        // Original colors (keeping for compatibility)
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -46,6 +55,10 @@ module.exports = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      fontFamily: {
+        // Air NZ uses "Helvetica Neue" and "Roboto" for digital
+        sans: ["Helvetica Neue", "Roboto", "Arial", "sans-serif"],
       },
     },
   },

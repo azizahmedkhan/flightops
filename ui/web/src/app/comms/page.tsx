@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -108,62 +109,67 @@ export default function CommsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen relative">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-black text-white relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-6">
             <div className="flex items-center space-x-3">
-              <MessageSquare className="h-8 w-8 text-green-600" />
+              <div className="bg-white p-2 rounded-lg">
+                <MessageSquare className="h-6 w-6 text-black" />
+              </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Draft Communications</h1>
-                <p className="text-sm text-gray-600">Generate customer communications with policy grounding</p>
+                <h1 className="text-2xl font-bold">Draft Communications</h1>
+                <p className="text-sm text-gray-300">Generate customer communications with policy grounding</p>
               </div>
             </div>
+            <Link href="/" className="text-sm font-medium text-white hover:text-gray-200">
+              Back to Home
+            </Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Form */}
-          <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Communication Settings</h2>
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+            <h2 className="text-xl font-bold text-black mb-6">Communication Settings</h2>
             
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
                   <input
                     {...register('flight_no')}
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
                     placeholder="NZ123"
                   />
                   {errors.flight_no && (
-                    <p className="mt-1 text-sm text-red-600">{errors.flight_no.message}</p>
+                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.flight_no.message}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Date
                   </label>
                   <input
                     {...register('date')}
                     type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
                   />
                   {errors.date && (
-                    <p className="mt-1 text-sm text-red-600">{errors.date.message}</p>
+                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.date.message}</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Communication Tone
                 </label>
                 <div className="grid grid-cols-1 gap-3">
@@ -175,18 +181,18 @@ export default function CommsPage() {
                         value={option.value}
                         className="sr-only"
                       />
-                      <div className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                      <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                         watch('tone') === option.value
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-300 hover:border-gray-400'
+                          ? 'border-black bg-gray-100'
+                          : 'border-gray-200 hover:border-gray-300'
                       }`}>
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium text-gray-900">{option.label}</p>
-                            <p className="text-sm text-gray-600">{option.description}</p>
+                            <p className="font-bold text-black">{option.label}</p>
+                            <p className="text-sm text-gray-600 font-medium">{option.description}</p>
                           </div>
                           {watch('tone') === option.value && (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
+                            <CheckCircle className="h-5 w-5 text-black" />
                           )}
                         </div>
                       </div>
@@ -196,7 +202,7 @@ export default function CommsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Communication Channel
                 </label>
                 <div className="grid grid-cols-3 gap-3">
@@ -210,13 +216,13 @@ export default function CommsPage() {
                           value={option.value}
                           className="sr-only"
                         />
-                        <div className={`p-3 border rounded-lg cursor-pointer transition-all text-center ${
+                        <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all text-center ${
                           watch('channel') === option.value
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-300 hover:border-gray-400'
+                            ? 'border-black bg-gray-100'
+                            : 'border-gray-200 hover:border-gray-300'
                         }`}>
                           <Icon className="h-6 w-6 mx-auto mb-2 text-gray-600" />
-                          <p className="text-sm font-medium text-gray-900">{option.label}</p>
+                          <p className="text-sm font-bold text-black">{option.label}</p>
                         </div>
                       </label>
                     )
@@ -227,16 +233,16 @@ export default function CommsPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-black text-white py-3 px-6 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-semibold transition-colors"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                     Drafting...
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
+                    <Send className="h-5 w-5 mr-2" />
                     Draft Communication
                   </>
                 )}
@@ -249,61 +255,65 @@ export default function CommsPage() {
             {response && (
               <>
                 {/* Context Information */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Plane className="h-5 w-5 mr-2 text-blue-600" />
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                    <div className="bg-black p-2 rounded-lg mr-3">
+                      <Plane className="h-5 w-5 text-white" />
+                    </div>
                     Flight Context
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Flight:</span>
-                      <span className="font-medium">{response.context.flight_no}</span>
+                      <span className="text-sm text-gray-600 font-semibold">Flight:</span>
+                      <span className="font-bold text-black">{response.context.flight_no}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Date:</span>
-                      <span className="font-medium">{response.context.date}</span>
+                      <span className="text-sm text-gray-600 font-semibold">Date:</span>
+                      <span className="font-bold text-black">{response.context.date}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Issue:</span>
-                      <span className="font-medium">{response.context.issue}</span>
+                      <span className="text-sm text-gray-600 font-semibold">Issue:</span>
+                      <span className="font-bold text-black">{response.context.issue}</span>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Impact:</span>
-                      <p className="text-sm text-gray-900 mt-1">{response.context.impact_summary}</p>
+                      <span className="text-sm text-gray-600 font-semibold">Impact:</span>
+                      <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.impact_summary}</p>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Options:</span>
-                      <p className="text-sm text-gray-900 mt-1">{response.context.options_summary}</p>
+                      <span className="text-sm text-gray-600 font-semibold">Options:</span>
+                      <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.options_summary}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Draft Communication */}
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <MessageSquare className="h-5 w-5 mr-2 text-green-600" />
+                    <h3 className="text-xl font-bold text-black flex items-center">
+                      <div className="bg-black p-2 rounded-lg mr-3">
+                        <MessageSquare className="h-5 w-5 text-white" />
+                      </div>
                       Draft Communication
                     </h3>
                     <button
                       onClick={() => copyToClipboard(response.draft)}
-                      className="flex items-center px-3 py-1 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      className="flex items-center px-4 py-2 text-sm text-black hover:text-gray-600 border-2 border-gray-200 rounded-lg hover:bg-gray-100 font-semibold transition-colors"
                     >
                       {copied ? (
                         <>
-                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <CheckCircle className="h-4 w-4 mr-1 text-black" />
                           Copied!
                         </>
                       ) : (
                         <>
-                          <Copy className="h-4 w-4 mr-1" />
+                          <Copy className="h-4 w-4 mr-1 text-black" />
                           Copy
                         </>
                       )}
                     </button>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
+                  <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-200">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-900 font-mono font-medium">
                       {response.draft}
                     </pre>
                   </div>
@@ -311,15 +321,17 @@ export default function CommsPage() {
 
                 {/* Policy Citations */}
                 {response.context.policy_citations.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <AlertCircle className="h-5 w-5 mr-2 text-yellow-600" />
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                    <h3 className="text-xl font-bold text-black mb-4 flex items-center">
+                      <div className="bg-black p-2 rounded-lg mr-3">
+                        <AlertCircle className="h-5 w-5 text-white" />
+                      </div>
                       Policy Citations
                     </h3>
                     <div className="space-y-2">
                       {response.context.policy_citations.map((citation, index) => (
-                        <div key={index} className="p-3 bg-yellow-50 rounded-lg">
-                          <p className="text-sm text-gray-700">{citation}</p>
+                        <div key={index} className="p-3 bg-gray-100 rounded-lg border-2 border-gray-200">
+                          <p className="text-sm text-gray-800 font-medium">{citation}</p>
                         </div>
                       ))}
                     </div>
@@ -329,9 +341,11 @@ export default function CommsPage() {
             )}
 
             {!response && (
-              <div className="bg-white rounded-xl shadow-sm p-12 border border-gray-200 text-center">
-                <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Generate a communication draft to see results here</p>
+              <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-12 border-2 border-gray-200 text-center">
+                <div className="bg-black p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <MessageSquare className="h-8 w-8 text-white" />
+                </div>
+                <p className="text-gray-600 font-semibold">Generate a communication draft to see results here</p>
               </div>
             )}
           </div>
