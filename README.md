@@ -63,6 +63,17 @@ Services:
 - http://localhost:8083 -> **comms-svc** (OpenAPI)
 - http://localhost:5173 -> **web UI**
 
+
+Gateway: http://localhost:8080/docs
+
+Retrieval: http://localhost:8081/docs
+
+Agent: http://localhost:8082/docs
+
+Comms: http://localhost:8083/docs
+
+Ingest: http://localhost:8084/docs
+
 ### 3) Ingest seed data & docs
 Once containers are up:
 ```bash
