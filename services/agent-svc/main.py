@@ -1,23 +1,27 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+
+from base_service import BaseService
+from fastapi import HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
-import os, psycopg, httpx, json
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+import psycopg, httpx, json
 from utils import LATENCY, log_startup
 
-SERVICE="agent-svc"
+# Initialize base service
+service = BaseService("agent-svc", "1.0.0")
+app = service.get_app()
 
-DB_HOST=os.getenv("DB_HOST","localhost")
-DB_PORT=int(os.getenv("DB_PORT","5432"))
-DB_NAME=os.getenv("DB_NAME","flightops")
-DB_USER=os.getenv("DB_USER","postgres")
-DB_PASS=os.getenv("DB_PASS","postgres")
-RETRIEVAL_URL=os.getenv("RETRIEVAL_URL","http://localhost:8081")
-COMMS_URL=os.getenv("COMMS_URL","http://localhost:8083")
-ALLOW_UNGROUNDED=os.getenv("ALLOW_UNGROUNDED_ANSWERS","false").lower() == "true"
-
-app = FastAPI(title="agent-svc")
+# Get environment variables using the base service
+DB_HOST = service.get_env_var("DB_HOST", "localhost")
+DB_PORT = service.get_env_int("DB_PORT", 5432)
+DB_NAME = service.get_env_var("DB_NAME", "flightops")
+DB_USER = service.get_env_var("DB_USER", "postgres")
+DB_PASS = service.get_env_var("DB_PASS", "postgres")
+RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://localhost:8081")
+COMMS_URL = service.get_env_var("COMMS_URL", "http://localhost:8083")
+ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
 
 class Ask(BaseModel):
     question: str
@@ -75,67 +79,76 @@ def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
         results = r.json().get("results", [])
         cits = [f"{x.get('title')}: {x.get('snippet')}" for x in results]
         return {"citations": cits}
-    except Exception:
+    except Exception as e:
+        service.log_error(e, "policy_grounder")
         return {"citations": []}
 
 def ensure_grounded(citations: List[str]) -> bool:
     if ALLOW_UNGROUNDED: return True
     return len(citations) > 0
 
-@app.get("/health")
-def health(): return {"ok": True}
-
-@app.get("/metrics")
-def metrics(): return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 @app.post("/ask")
-def ask(body: Ask):
-    with LATENCY.labels(SERVICE,"/ask","POST").time():
-        q = pii_scrub(body.question)
-        fno = body.flight_no or "NZ123"
-        date = body.date or "2025-09-17"
+def ask(body: Ask, request: Request):
+    with LATENCY.labels("agent-svc","/ask","POST").time():
+        try:
+            q = pii_scrub(body.question)
+            fno = body.flight_no or "NZ123"
+            date = body.date or "2025-09-17"
 
-        flight = tool_flight_lookup(fno, date)
-        impact = tool_impact_assessor(fno, date)
-        options = tool_rebooking_optimizer(fno, date)
-        policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
+            flight = tool_flight_lookup(fno, date)
+            impact = tool_impact_assessor(fno, date)
+            options = tool_rebooking_optimizer(fno, date)
+            policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
 
-        if not ensure_grounded(policy.get("citations", [])):
-            raise HTTPException(status_code=400, detail="Unable to verify policy grounding for this question.")
+            if not ensure_grounded(policy.get("citations", [])):
+                raise HTTPException(status_code=400, detail="Unable to verify policy grounding for this question.")
 
-        options_summary = "; ".join([f"{o['plan']} (cx={o['cx_score']:.2f}, cost≈${o['cost_estimate']})" for o in options])
-        payload = {
-            "flight": flight,
-            "impact": impact,
-            "options": options,
-            "policy_citations": policy.get("citations", []),
-        }
-        return {"answer": {
-                    "issue": f"Delay/disruption for {fno} on {date}",
-                    "impact_summary": impact["summary"],
-                    "options_summary": options_summary,
-                    "citations": policy.get("citations", [])
-                },
-                "tools_payload": payload}
+            options_summary = "; ".join([f"{o['plan']} (cx={o['cx_score']:.2f}, cost≈${o['cost_estimate']})" for o in options])
+            payload = {
+                "flight": flight,
+                "impact": impact,
+                "options": options,
+                "policy_citations": policy.get("citations", []),
+            }
+            result = {"answer": {
+                        "issue": f"Delay/disruption for {fno} on {date}",
+                        "impact_summary": impact["summary"],
+                        "options_summary": options_summary,
+                        "citations": policy.get("citations", [])
+                    },
+                    "tools_payload": payload}
+            
+            service.log_request(request, {"status": "success"})
+            return result
+        except Exception as e:
+            service.log_error(e, "ask endpoint")
+            raise
 
 @app.post("/draft_comms")
-def draft_comms(body: Ask):
-    # Compose with comms-svc using grounded context
-    q = body.question or "Draft email + SMS for affected passengers"
-    fno = body.flight_no or "NZ123"
-    date = body.date or "2025-09-17"
-    impact = tool_impact_assessor(fno, date)
-    options = tool_rebooking_optimizer(fno, date)
-    policy = tool_policy_grounder(q)
-    if not ensure_grounded(policy.get("citations", [])):
-        raise HTTPException(status_code=400, detail="Policy grounding required.")
+def draft_comms(body: Ask, request: Request):
+    try:
+        # Compose with comms-svc using grounded context
+        q = body.question or "Draft email + SMS for affected passengers"
+        fno = body.flight_no or "NZ123"
+        date = body.date or "2025-09-17"
+        impact = tool_impact_assessor(fno, date)
+        options = tool_rebooking_optimizer(fno, date)
+        policy = tool_policy_grounder(q)
+        if not ensure_grounded(policy.get("citations", [])):
+            raise HTTPException(status_code=400, detail="Policy grounding required.")
 
-    context = {
-        "flight_no": fno, "date": date,
-        "issue":"Weather-related delay",
-        "impact_summary": impact["summary"],
-        "options_summary": "; ".join([o["plan"] for o in options]),
-        "policy_citations": policy.get("citations", [])
-    }
-    r = httpx.post(f"{COMMS_URL}/draft", json={"context": context, "tone":"empathetic", "channel":"email"}, timeout=60.0)
-    return {"context": context, "draft": r.json().get("draft")}
+        context = {
+            "flight_no": fno, "date": date,
+            "issue":"Weather-related delay",
+            "impact_summary": impact["summary"],
+            "options_summary": "; ".join([o["plan"] for o in options]),
+            "policy_citations": policy.get("citations", [])
+        }
+        r = httpx.post(f"{COMMS_URL}/draft", json={"context": context, "tone":"empathetic", "channel":"email"}, timeout=60.0)
+        result = {"context": context, "draft": r.json().get("draft")}
+        
+        service.log_request(request, {"status": "success"})
+        return result
+    except Exception as e:
+        service.log_error(e, "draft_comms endpoint")
+        raise

@@ -3,7 +3,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY services/ingest-svc/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy shared directory first
+COPY services/shared ./shared
+
+# Copy service files
 COPY services/ingest-svc/ .
+
 # Copy data into the image so /ingest/seed works without mounts
 COPY data /data
 EXPOSE 8084

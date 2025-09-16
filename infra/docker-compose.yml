@@ -19,7 +19,9 @@ services:
     ports: ["6379:6379"]
 
   retrieval-svc:
-    build: ../services/retrieval-svc
+    build:
+      context: ..
+      dockerfile: services/retrieval-svc/Dockerfile
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -34,14 +36,18 @@ services:
     ports: ["8081:8081"]
 
   comms-svc:
-    build: ../services/comms-svc
+    build:
+      context: ..
+      dockerfile: services/comms-svc/Dockerfile
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
     ports: ["8083:8083"]
 
   agent-svc:
-    build: ../services/agent-svc
+    build:
+      context: ..
+      dockerfile: services/agent-svc/Dockerfile
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -76,7 +82,9 @@ services:
     ports: ["8084:8084"]
 
   gateway-api:
-    build: ../services/gateway-api
+    build:
+      context: ..
+      dockerfile: services/gateway-api/Dockerfile
     environment:
       - AGENT_URL=http://agent-svc:8082
       - RETRIEVAL_URL=http://retrieval-svc:8081

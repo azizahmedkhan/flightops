@@ -1,17 +1,20 @@
-from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+
+from base_service import BaseService
+from fastapi import Request
 from pydantic import BaseModel
 from typing import Dict, Any
-import os
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from utils import REQUEST_COUNT, LATENCY, log_startup
 
-SERVICE="comms-svc"
+# Initialize base service
+service = BaseService("comms-svc", "1.0.0")
+app = service.get_app()
 
-CHAT_MODEL=os.getenv("CHAT_MODEL","gpt-4o-mini")
-OPENAI_API_KEY=os.getenv("OPENAI_API_KEY","")
-
-app = FastAPI(title="comms-svc")
+# Get environment variables using the base service
+CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 
 class DraftReq(BaseModel):
     context: Dict[str, Any]
@@ -25,23 +28,19 @@ def llm_chat(prompt: str) -> str:
             client = OpenAI(api_key=OPENAI_API_KEY)
             resp = client.chat.completions.create(model=CHAT_MODEL, messages=[{"role":"user","content":prompt}])
             return resp.choices[0].message.content
-        except Exception:
+        except Exception as e:
+            service.log_error(e, "llm_chat")
             pass
     # fallback mock
     return f"[MOCK DRAFT]\n{prompt[:500]}..."
 
-@app.get("/health")
-def health(): return {"ok": True}
-
-@app.get("/metrics")
-def metrics(): return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-
 @app.post("/draft")
-def draft(req: DraftReq):
-    with LATENCY.labels(SERVICE,"/draft","POST").time():
-        c = req.context
-        policy_bits = "\n".join([f"- {p}" for p in c.get("policy_citations", [])])
-        prompt = f"""You are an airline customer-communications assistant.
+def draft(req: DraftReq, request: Request):
+    with LATENCY.labels("comms-svc","/draft","POST").time():
+        try:
+            c = req.context
+            policy_bits = "\n".join([f"- {p}" for p in c.get("policy_citations", [])])
+            prompt = f"""You are an airline customer-communications assistant.
 Channel: {req.channel}
 Tone: {req.tone}
 Task: Draft a clear, concise, and compliant message for affected passengers of flight {c.get('flight_no')} on {c.get('date')}.
@@ -57,5 +56,10 @@ Policy citations:
 
 Draft now:
 """
-        text = llm_chat(prompt)
-        return {"draft": text}
+            text = llm_chat(prompt)
+            result = {"draft": text}
+            service.log_request(request, {"status": "success"})
+            return result
+        except Exception as e:
+            service.log_error(e, "draft endpoint")
+            raise

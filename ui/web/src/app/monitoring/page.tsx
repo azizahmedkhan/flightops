@@ -43,7 +43,7 @@ export default function MonitoringPage() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'
       const url = service.name === 'Gateway API' ? baseUrl : `${baseUrl.replace('8080', service.name === 'Agent Service' ? '8082' : service.name === 'Retrieval Service' ? '8081' : service.name === 'Comms Service' ? '8083' : '8084')}${service.url}`
-      
+      console.log('Checking service health:', url)
       const response = await fetch(url, { 
         method: 'GET',
         signal: AbortSignal.timeout(5000) // 5 second timeout
