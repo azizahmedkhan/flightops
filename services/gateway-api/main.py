@@ -43,3 +43,9 @@ async def draft_comms(payload: dict):
     async with httpx.AsyncClient() as client:
         r = await client.post(f"{AGENT_URL}/draft_comms", json=payload, timeout=60.0)
         return r.json()
+
+@app.post("/search")
+async def search(payload: dict):
+    async with httpx.AsyncClient() as client:
+        r = await client.post(f"{RETRIEVAL_URL}/search", json=payload, timeout=30.0)
+        return r.json()
