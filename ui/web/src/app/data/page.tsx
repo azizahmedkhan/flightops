@@ -28,12 +28,7 @@ export default function DataPage() {
   const handleSeed = async () => {
     setSeeding(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'}/demo/seed`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      })
+      const res = await fetch(`${process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'}/demo/seed`)
 
       if (!res.ok) {
         throw new Error('Failed to seed data')

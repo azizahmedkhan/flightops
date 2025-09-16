@@ -18,6 +18,7 @@ app = service.get_app()
 # Get environment variables using the base service
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
+RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://retrieval-svc:8081")
 
 # In-memory storage for demo purposes (in production, use Redis or database)
 chat_sessions = {}
@@ -321,6 +322,203 @@ def list_chat_sessions(req: Request):
     except Exception as e:
         service.log_error(e, "list_chat_sessions")
         raise HTTPException(status_code=500, detail="Failed to list chat sessions")
+
+@app.get("/message")
+def get_message(flight_no: str, date: str, req: Request):
+    """Get latest generated email/SMS for a specific flight and date"""
+    try:
+        # Call agent service to get grounded context
+        try:
+            agent_response = httpx.post(
+                f"{AGENT_URL}/draft_comms",
+                json={
+                    "question": "Draft email + SMS for affected passengers",
+                    "flight_no": flight_no,
+                    "date": date
+                },
+                timeout=30.0
+            )
+            
+            if agent_response.status_code == 200:
+                agent_data = agent_response.json()
+                context = agent_data.get("context", {})
+                draft = agent_data.get("draft", {})
+                
+                # Generate both email and SMS versions
+                email_response = httpx.post(
+                    f"{COMMS_URL}/draft",
+                    json={
+                        "context": context,
+                        "tone": "empathetic",
+                        "channel": "email"
+                    },
+                    timeout=30.0
+                )
+                
+                sms_response = httpx.post(
+                    f"{COMMS_URL}/draft",
+                    json={
+                        "context": context,
+                        "tone": "empathetic",
+                        "channel": "sms"
+                    },
+                    timeout=30.0
+                )
+                
+                result = {
+                    "flight_no": flight_no,
+                    "date": date,
+                    "email": email_response.json().get("draft", "Email not available") if email_response.status_code == 200 else "Email generation failed",
+                    "sms": sms_response.json().get("draft", "SMS not available") if sms_response.status_code == 200 else "SMS generation failed",
+                    "context": context,
+                    "generated_at": datetime.now().isoformat()
+                }
+            else:
+                result = {
+                    "flight_no": flight_no,
+                    "date": date,
+                    "email": "Unable to generate email - flight data not available",
+                    "sms": "Unable to generate SMS - flight data not available",
+                    "error": "Flight data not found",
+                    "generated_at": datetime.now().isoformat()
+                }
+        except Exception as e:
+            service.log_error(e, "get_message")
+            result = {
+                "flight_no": flight_no,
+                "date": date,
+                "email": "Service temporarily unavailable",
+                "sms": "Service temporarily unavailable",
+                "error": "Service error",
+                "generated_at": datetime.now().isoformat()
+            }
+        
+        service.log_request(req, {"status": "success", "flight_no": flight_no, "date": date})
+        return result
+        
+    except Exception as e:
+        service.log_error(e, "get_message")
+        raise HTTPException(status_code=500, detail="Failed to get message")
+
+class QARequest(BaseModel):
+    question: str
+    flight_no: str
+    date: str
+
+@app.post("/qa")
+def qa(request: QARequest, req: Request):
+    """Narrow Q&A endpoint with retrieval-only answers (no state changes)"""
+    try:
+        # Rate limiting check (simple in-memory for demo)
+        client_ip = req.client.host if hasattr(req, 'client') else "unknown"
+        rate_limit_key = f"{client_ip}:{request.flight_no}:{request.date}"
+        
+        # Simple rate limiting: max 10 requests per minute per flight
+        current_time = datetime.now()
+        if not hasattr(qa, 'rate_limit'):
+            qa.rate_limit = {}
+        
+        if rate_limit_key in qa.rate_limit:
+            last_request = qa.rate_limit[rate_limit_key]
+            if (current_time - last_request).seconds < 60:
+                # Check if we've exceeded 10 requests in the last minute
+                if not hasattr(qa, 'request_counts'):
+                    qa.request_counts = {}
+                if rate_limit_key not in qa.request_counts:
+                    qa.request_counts[rate_limit_key] = []
+                
+                # Clean old requests
+                qa.request_counts[rate_limit_key] = [
+                    t for t in qa.request_counts[rate_limit_key] 
+                    if (current_time - t).seconds < 60
+                ]
+                
+                if len(qa.request_counts[rate_limit_key]) >= 10:
+                    raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+                
+                qa.request_counts[rate_limit_key].append(current_time)
+        else:
+            qa.rate_limit[rate_limit_key] = current_time
+            qa.request_counts = getattr(qa, 'request_counts', {})
+            qa.request_counts[rate_limit_key] = [current_time]
+        
+        # PII scrubbing
+        def pii_scrub(text: str) -> str:
+            import re
+            text = re.sub(r"[A-Z0-9]{6}(?=\b)", "[PNR]", text)
+            text = re.sub(r"[\w\.-]+@[\w\.-]+", "[EMAIL]", text)
+            text = re.sub(r"\+?\d[\d\s-]{6,}", "[PHONE]", text)
+            return text
+        
+        scrubbed_question = pii_scrub(request.question)
+        
+        # Use retrieval service for policy grounding
+        try:
+            retrieval_response = httpx.post(
+                f"{RETRIEVAL_URL}/search",
+                json={
+                    "q": scrubbed_question + " policy compensation rebooking",
+                    "k": 3
+                },
+                timeout=15.0
+            )
+            
+            if retrieval_response.status_code == 200:
+                retrieval_data = retrieval_response.json()
+                citations = retrieval_data.get("results", [])
+                
+                # Generate safe, limited response based on citations
+                if citations:
+                    # Extract key information from citations
+                    policy_info = []
+                    for citation in citations[:2]:  # Limit to top 2 citations
+                        policy_info.append(f"{citation.get('title', 'Policy')}: {citation.get('snippet', '')[:200]}")
+                    
+                    answer = f"Based on our policies: {' '.join(policy_info[:1])}"
+                    if len(policy_info) > 1:
+                        answer += f" Additional information: {policy_info[1]}"
+                else:
+                    answer = "I can help with general questions about your flight status, rebooking options, and compensation policies. Please contact our support team for specific assistance."
+                
+                result = {
+                    "question": scrubbed_question,
+                    "answer": answer,
+                    "flight_no": request.flight_no,
+                    "date": request.date,
+                    "citations": citations,
+                    "answered_at": current_time.isoformat(),
+                    "source": "retrieval_only"
+                }
+            else:
+                result = {
+                    "question": scrubbed_question,
+                    "answer": "I'm having trouble accessing policy information right now. Please contact our support team for assistance.",
+                    "flight_no": request.flight_no,
+                    "date": request.date,
+                    "citations": [],
+                    "answered_at": current_time.isoformat(),
+                    "source": "fallback"
+                }
+        except Exception as e:
+            service.log_error(e, "qa_retrieval")
+            result = {
+                "question": scrubbed_question,
+                "answer": "I'm experiencing technical difficulties. Please contact our support team for assistance.",
+                "flight_no": request.flight_no,
+                "date": request.date,
+                "citations": [],
+                "answered_at": current_time.isoformat(),
+                "source": "error"
+            }
+        
+        service.log_request(req, {"status": "success", "flight_no": request.flight_no, "date": request.date})
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        service.log_error(e, "qa")
+        raise HTTPException(status_code=500, detail="Failed to process Q&A request")
 
 @app.get("/test")
 def test_endpoint(req: Request):

@@ -66,12 +66,64 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
             crew = cur.fetchone()[0]
     return {"passengers": pax, "crew": crew, "summary": f"{pax} passengers and {crew} crew affected."}
 
-def tool_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[str, Any]]:
-    # heuristic: create two fake options with simple trade-offs
-    return [
-        {"plan":"Rebook on next NZ service + meal voucher", "cx_score":0.82, "cost_estimate": 120 * 50, "notes":"Minimizes missed connections"},
-        {"plan":"Split pax across NZ + partner airline", "cx_score":0.77, "cost_estimate": 90 * 50, "notes":"Lower cost, more complexity"},
-    ]
+def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
+    """Generate rebooking options based on passenger count and route type."""
+    # Get passenger count
+    impact = tool_impact_assessor(flight_no, date)
+    pax_count = impact.get("passengers", 0)
+    
+    # Get flight details to determine route type
+    flight = tool_flight_lookup(flight_no, date)
+    origin = flight.get("origin", "")
+    destination = flight.get("destination", "")
+    
+    # Determine if domestic or international
+    is_domestic = origin in ["AKL", "WLG", "CHC"] and destination in ["AKL", "WLG", "CHC"]
+    
+    options = []
+    
+    # Base option: Next available flight
+    if is_domestic:
+        options.append({
+            "plan": "Rebook on next available NZ domestic service + meal voucher",
+            "cx_score": 0.85,
+            "cost_estimate": 80 * pax_count,
+            "notes": "Minimizes missed connections, domestic route"
+        })
+    else:
+        options.append({
+            "plan": "Rebook on next available NZ international service + meal voucher",
+            "cx_score": 0.82,
+            "cost_estimate": 120 * pax_count,
+            "notes": "International route, higher cost but better service"
+        })
+    
+    # High passenger count option: Split across carriers
+    if pax_count >= 50:
+        options.append({
+            "plan": f"Split {pax_count} passengers across NZ + partner airline",
+            "cx_score": 0.75,
+            "cost_estimate": 60 * pax_count,
+            "notes": "High passenger count, cost-effective but more complex"
+        })
+    else:
+        # Low passenger count option: Direct rebooking
+        options.append({
+            "plan": "Direct rebooking on next NZ service + compensation",
+            "cx_score": 0.88,
+            "cost_estimate": 100 * pax_count,
+            "notes": "Low passenger count, premium service"
+        })
+    
+    # Third option: Flexible rebooking
+    options.append({
+        "plan": "Flexible rebooking within 48h + accommodation if needed",
+        "cx_score": 0.80,
+        "cost_estimate": 90 * pax_count,
+        "notes": "Balanced approach, good for mixed passenger needs"
+    })
+    
+    return options[:3]  # Return top 3 options
 
 def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
     try:
@@ -97,7 +149,7 @@ def ask(body: Ask, request: Request):
 
             flight = tool_flight_lookup(fno, date)
             impact = tool_impact_assessor(fno, date)
-            options = tool_rebooking_optimizer(fno, date)
+            options = tool_rebooking_options(fno, date)
             policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
 
             if not ensure_grounded(policy.get("citations", [])):
@@ -132,7 +184,7 @@ def draft_comms(body: Ask, request: Request):
         fno = body.flight_no or "NZ123"
         date = body.date or "2025-09-17"
         impact = tool_impact_assessor(fno, date)
-        options = tool_rebooking_optimizer(fno, date)
+        options = tool_rebooking_options(fno, date)
         policy = tool_policy_grounder(q)
         if not ensure_grounded(policy.get("citations", [])):
             raise HTTPException(status_code=400, detail="Policy grounding required.")

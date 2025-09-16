@@ -6,11 +6,13 @@ from base_service import BaseService
 from fastapi import Request
 from pydantic import BaseModel
 import json, math
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import psycopg
 import httpx
 from utils import REQUEST_COUNT, LATENCY, log_startup
 from contextlib import asynccontextmanager
+from rank_bm25 import BM25Okapi
+import re
 
 # Initialize base service
 service = BaseService("retrieval-svc", "1.0.0")
@@ -53,8 +55,8 @@ class Query(BaseModel):
     q: str
     k: int = 5
 
-def embed(text: str):
-    # try OpenAI embeddings first; fallback to naive hash vector
+def embed(text: str) -> List[float]:
+    """Generate embeddings if API key is available, otherwise return deterministic fake vectors."""
     if OPENAI_API_KEY:
         try:
             from openai import OpenAI
@@ -63,54 +65,160 @@ def embed(text: str):
             return resp.data[0].embedding
         except Exception as e:
             service.log_error(e, "embedding generation")
-            pass
-    # fallback: simple hashed vector of 1536 dims
+            # Fall through to fake vectors
+    # fallback: deterministic fake vector
     import random, hashlib
     random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
     return [random.random() for _ in range(1536)]
 
+def tokenize(text: str) -> List[str]:
+    """Simple tokenization for BM25."""
+    return re.findall(r'\b\w+\b', text.lower())
+
+def get_bm25_scores(query: str, documents: List[Dict[str, Any]]) -> List[Tuple[int, float]]:
+    """Get BM25 scores for documents given a query."""
+    if not documents:
+        return []
+    
+    # Tokenize documents and query
+    doc_tokens = [tokenize(doc['content']) for doc in documents]
+    query_tokens = tokenize(query)
+    
+    # Create BM25 index
+    bm25 = BM25Okapi(doc_tokens)
+    
+    # Get scores
+    scores = bm25.get_scores(query_tokens)
+    
+    # Return (doc_id, score) pairs
+    return [(doc['doc_id'], float(score)) for doc, score in zip(documents, scores)]
+
+def get_vector_scores(query: str, k: int) -> List[Tuple[int, float]]:
+    """Get vector similarity scores using pgvector."""
+    vec = embed(query)
+    
+    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+        with conn.cursor() as cur:
+            # Check if embeddings are available
+            cur.execute("SELECT COUNT(*) FROM doc_embeddings")
+            cnt = cur.fetchone()[0]
+            
+            if cnt == 0:
+                return []
+            
+            # Create temp table for query vector
+            cur.execute("CREATE TEMP TABLE tmp_query(q vector(1536));")
+            cur.execute("INSERT INTO tmp_query VALUES (%s)", (vec,))
+            
+            # Get vector similarity scores
+            cur.execute("""
+                SELECT d.id, 1 - (de.embedding <#> t.q) AS score
+                FROM doc_embeddings de, docs d, tmp_query t
+                WHERE d.id = de.doc_id
+                ORDER BY de.embedding <-> t.q
+                LIMIT %s
+            """, (k,))
+            
+            return [(row[0], float(row[1])) for row in cur.fetchall()]
+
+def hybrid_search(query: str, k: int = 5) -> List[Dict[str, Any]]:
+    """Perform hybrid search combining BM25 and vector search."""
+    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+        with conn.cursor() as cur:
+            # Get all documents for BM25
+            cur.execute("SELECT id, title, content, meta FROM docs")
+            docs = []
+            for row in cur.fetchall():
+                docs.append({
+                    'doc_id': row[0],
+                    'title': row[1],
+                    'content': row[2],
+                    'meta': row[3] or {}
+                })
+            
+            if not docs:
+                return []
+            
+            # Get BM25 scores
+            bm25_scores = get_bm25_scores(query, docs)
+            
+            # Get vector scores
+            vector_scores = get_vector_scores(query, k * 2)  # Get more for better merging
+            
+            # Normalize scores (simple min-max normalization)
+            def normalize_scores(scores):
+                if not scores:
+                    return {}
+                min_score = min(score for _, score in scores)
+                max_score = max(score for _, score in scores)
+                if max_score == min_score:
+                    return {doc_id: 1.0 for doc_id, _ in scores}
+                return {doc_id: (score - min_score) / (max_score - min_score) 
+                       for doc_id, score in scores}
+            
+            bm25_normalized = normalize_scores(bm25_scores)
+            vector_normalized = normalize_scores(vector_scores)
+            
+            # Combine scores (equal weight for now)
+            combined_scores = {}
+            all_doc_ids = set(bm25_normalized.keys()) | set(vector_normalized.keys())
+            
+            for doc_id in all_doc_ids:
+                bm25_score = bm25_normalized.get(doc_id, 0.0)
+                vector_score = vector_normalized.get(doc_id, 0.0)
+                combined_scores[doc_id] = 0.5 * bm25_score + 0.5 * vector_score
+            
+            # Sort by combined score and get top k
+            sorted_docs = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+            
+            # Build results
+            results = []
+            doc_lookup = {doc['doc_id']: doc for doc in docs}
+            
+            for doc_id, score in sorted_docs:
+                doc = doc_lookup[doc_id]
+                results.append({
+                    'doc_id': doc_id,
+                    'title': doc['title'],
+                    'snippet': doc['content'][:300] + '...' if len(doc['content']) > 300 else doc['content'],
+                    'score': score,
+                    'source': doc['meta'].get('source', 'unknown')
+                })
+            
+            return results
+
 @app.post("/search")
 def search(q: Query, request: Request):
-    from time import time as now
+    """Hybrid search endpoint combining BM25 and vector search."""
     with LATENCY.labels("retrieval-svc","/search","POST").time():
         try:
-            vec = embed(q.q)
-            with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
-                with conn.cursor() as cur:
-                    # If vector table empty, fallback to keyword
-                    cur.execute("SELECT COUNT(*) FROM doc_embeddings")
-                    cnt = cur.fetchone()[0]
-                    if cnt == 0:
-                        cur.execute("""
-                        SELECT id,title,content,meta
-                        FROM docs
-                        WHERE content ILIKE %s OR title ILIKE %s
-                        LIMIT %s
-                        """, (f"%{q.q}%", f"%{q.q}%", q.k))
-                        rows = cur.fetchall()
-                        results = []
-                        for id_, title, content, meta in rows:
-                            results.append({"doc_id": id_, "title": title, "snippet": content[:300], "meta": meta or {}})
-                        result = {"mode":"keyword","results":results}
-                    else:
-                        # vector search
-                        # upsert temp query embedding
-                        cur.execute("CREATE TEMP TABLE tmp(q vector(1536));")
-                        cur.execute("INSERT INTO tmp VALUES (%s)", (vec,))
-                        cur.execute("""
-                            SELECT d.id, d.title, d.content, d.meta,
-                                   1 - (de.embedding <#> t.q) AS score
-                            FROM doc_embeddings de, docs d, tmp t
-                            WHERE d.id = de.doc_id
-                            ORDER BY de.embedding <-> t.q
-                            LIMIT %s
-                        """, (q.k,))
-                        rows = cur.fetchall()
-                        results = [{"doc_id": r[0], "title": r[1], "snippet": r[2][:300], "meta": r[3] or {}, "score": float(r[4])} for r in rows]
-                        result = {"mode":"vector","results":results}
+            # Perform hybrid search
+            results = hybrid_search(q.q, q.k)
             
-            service.log_request(request, {"status": "success"})
+            # Determine search mode based on available data
+            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM doc_embeddings")
+                    embeddings_count = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM docs")
+                    docs_count = cur.fetchone()[0]
+            
+            if embeddings_count > 0:
+                mode = "hybrid"
+            elif docs_count > 0:
+                mode = "bm25_only"
+            else:
+                mode = "no_data"
+            
+            result = {
+                "mode": mode,
+                "results": results,
+                "embeddings_available": embeddings_count > 0
+            }
+            
+            service.log_request(request, {"status": "success", "mode": mode, "result_count": len(results)})
             return result
+            
         except Exception as e:
             service.log_error(e, "search endpoint")
             raise
