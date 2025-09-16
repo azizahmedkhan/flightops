@@ -1,4 +1,39 @@
-flight_no,flight_date,crew_id
-NZ123,2025-09-17,C001
-NZ123,2025-09-17,C002
-NZ123,2025-09-17,C003
+flight_no,flight_date,crew_id,crew_role
+NZ123,2025-09-17,C001,Captain
+NZ123,2025-09-17,C002,First Officer
+NZ123,2025-09-17,C003,Flight Service Manager
+NZ123,2025-09-17,C004,Senior Flight Attendant
+NZ123,2025-09-17,C005,Flight Attendant
+NZ456,2025-09-17,C006,Captain
+NZ456,2025-09-17,C007,First Officer
+NZ456,2025-09-17,C008,Purser
+NZ456,2025-09-17,C009,Flight Attendant
+NZ789,2025-09-17,C010,Captain
+NZ789,2025-09-17,C011,First Officer
+NZ789,2025-09-17,C012,Relief Pilot
+NZ789,2025-09-17,C013,Purser
+NZ789,2025-09-17,C014,Flight Attendant
+NZ321,2025-09-17,C021,Captain
+NZ321,2025-09-17,C022,First Officer
+NZ321,2025-09-17,C003,Cabin Service Manager
+NZ321,2025-09-17,C015,Flight Attendant
+NZ321,2025-09-17,C016,Flight Attendant
+NZ654,2025-09-18,C017,Captain
+NZ654,2025-09-18,C018,First Officer
+NZ654,2025-09-18,C019,Purser
+NZ654,2025-09-18,C020,Cabin Service Manager
+NZ654,2025-09-18,C005,Flight Attendant
+NZ987,2025-09-18,C023,Captain
+NZ987,2025-09-18,C024,First Officer
+NZ987,2025-09-18,C013,Flight Attendant Lead
+NZ987,2025-09-18,C009,Flight Attendant
+NZ432,2025-09-18,C025,Captain
+NZ432,2025-09-18,C026,First Officer
+NZ432,2025-09-18,C027,Relief Captain
+NZ432,2025-09-18,C028,Flight Service Manager
+NZ432,2025-09-18,C029,Senior Flight Attendant
+NZ432,2025-09-18,C030,Flight Attendant
+NZ278,2025-09-18,C031,Captain
+NZ278,2025-09-18,C032,First Officer
+NZ278,2025-09-18,C033,Purser
+NZ278,2025-09-18,C034,Flight Attendant
