@@ -81,6 +81,20 @@ services:
         condition: service_healthy
     ports: ["8084:8084"]
 
+  customer-chat-svc:
+    build:
+      context: ..
+      dockerfile: services/customer-chat-svc/Dockerfile
+    environment:
+      - COMMS_URL=http://comms-svc:8083
+      - AGENT_URL=http://agent-svc:8082
+    depends_on:
+      agent-svc:
+        condition: service_started
+      comms-svc:
+        condition: service_started
+    ports: ["8085:8085"]
+
   gateway-api:
     build:
       context: ..
@@ -90,6 +104,7 @@ services:
       - RETRIEVAL_URL=http://retrieval-svc:8081
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
+      - CUSTOMER_CHAT_URL=http://customer-chat-svc:8085
     depends_on:
       agent-svc:
         condition: service_started
@@ -98,6 +113,8 @@ services:
       comms-svc:
         condition: service_started
       ingest-svc:
+        condition: service_started
+      customer-chat-svc:
         condition: service_started
     ports: ["8080:8080"]
 

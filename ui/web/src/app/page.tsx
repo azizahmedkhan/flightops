@@ -45,6 +45,13 @@ export default function HomePage() {
       icon: Activity,
       href: '/monitoring',
       color: 'bg-red-500'
+    },
+    {
+      title: 'Customer Communication',
+      description: 'Test customer chat, email, and SMS communication',
+      icon: MessageSquare,
+      href: '/customer-chat',
+      color: 'bg-indigo-500'
     }
   ]
 
