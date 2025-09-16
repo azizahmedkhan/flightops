@@ -19,7 +19,7 @@ services:
     ports: ["6379:6379"]
 
   retrieval-svc:
-    build: ./services/retrieval-svc
+    build: ../services/retrieval-svc
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -34,14 +34,14 @@ services:
     ports: ["8081:8081"]
 
   comms-svc:
-    build: ./services/comms-svc
+    build: ../services/comms-svc
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
     ports: ["8083:8083"]
 
   agent-svc:
-    build: ./services/agent-svc
+    build: ../services/agent-svc
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -59,7 +59,9 @@ services:
     ports: ["8082:8082"]
 
   ingest-svc:
-    build: ./services/ingest-svc
+    build:
+      context: ..
+      dockerfile: services/ingest-svc/Dockerfile
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -74,7 +76,7 @@ services:
     ports: ["8084:8084"]
 
   gateway-api:
-    build: ./services/gateway-api
+    build: ../services/gateway-api
     environment:
       - AGENT_URL=http://agent-svc:8082
       - RETRIEVAL_URL=http://retrieval-svc:8081
@@ -92,7 +94,7 @@ services:
     ports: ["8080:8080"]
 
   web:
-    build: ./ui/web
+    build: ../ui/web
     depends_on:
       gateway-api:
         condition: service_started
