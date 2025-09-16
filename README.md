@@ -123,5 +123,8 @@ See `.env.example`:
 - The “rebooking optimizer” uses a heuristic (no heavy OR-Tools) to keep images small.
 - Replace OpenAI with AWS Bedrock by swapping the `llm.py` in each service (adapter provided stub).
 
+Kagle Flight Delay Dat
+https://www.kaggle.com/datasets/sriharshaeedala/airline-delay/data
+
 ## License
 MIT
