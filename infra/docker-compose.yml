@@ -105,6 +105,11 @@ services:
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
       - CUSTOMER_CHAT_URL=http://customer-chat-svc:8085
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
     depends_on:
       agent-svc:
         condition: service_started
@@ -128,6 +133,16 @@ services:
       gateway-api:
         condition: service_started
     ports: ["3000:3000"]
+
+  stack-ready:
+    image: alpine:3.19
+    depends_on:
+      web:
+        condition: service_started
+      gateway-api:
+        condition: service_started
+    command: ["/bin/sh", "-c", "echo 'FlightOps stack is ready — visit http://localhost:3000'" ]
+    restart: "no"
 
 volumes:
   dbdata:

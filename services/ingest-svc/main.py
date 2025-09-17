@@ -137,7 +137,7 @@ def parse_markdown_files() -> Tuple[int, bool]:
                     meta JSONB
                 );
                 CREATE TABLE IF NOT EXISTS doc_embeddings(
-                    doc_id INT REFERENCES docs(id) ON DELETE CASCADE,
+                    doc_id INT PRIMARY KEY REFERENCES docs(id) ON DELETE CASCADE,
                     embedding vector(1536)
                 );
             """)
