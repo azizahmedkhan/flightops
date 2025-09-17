@@ -110,6 +110,8 @@ services:
       - DB_NAME=${DB_NAME:-flightops}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASS=${DB_PASS:-postgres}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
     depends_on:
       agent-svc:
         condition: service_started
