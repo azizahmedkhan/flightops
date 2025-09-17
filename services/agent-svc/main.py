@@ -29,6 +29,7 @@ DB_PASS = service.get_env_var("DB_PASS", "postgres")
 RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://localhost:8081")
 COMMS_URL = service.get_env_var("COMMS_URL", "http://localhost:8083")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
+CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
 
 # Create database connection pool
@@ -293,7 +294,7 @@ def generate_base_rebooking_options(flight_no: str, date: str, pax_count: int, c
     # Option 5: Alternative routing
     # Get flight details to determine origin and destination
     try:
-        flight_details = get_flight_details(flight_no, date)
+        flight_details = tool_flight_lookup(flight_no, date)
         origin = flight_details.get("origin", "AKL")
         destination = flight_details.get("destination", "SYD")
     except:
