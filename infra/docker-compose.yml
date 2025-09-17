@@ -88,12 +88,49 @@ services:
     environment:
       - COMMS_URL=http://comms-svc:8083
       - AGENT_URL=http://agent-svc:8082
+      - RETRIEVAL_URL=http://retrieval-svc:8081
     depends_on:
       agent-svc:
         condition: service_started
       comms-svc:
         condition: service_started
+      retrieval-svc:
+        condition: service_started
+    ports: ["8087:8085"]
+
+  predictive-svc:
+    build:
+      context: ..
+      dockerfile: services/predictive-svc/Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+    depends_on:
+      db:
+        condition: service_healthy
     ports: ["8085:8085"]
+
+  crew-svc:
+    build:
+      context: ..
+      dockerfile: services/crew-svc/Dockerfile
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-flightops}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASS=${DB_PASS:-postgres}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8086:8086"]
 
   gateway-api:
     build:
@@ -105,6 +142,8 @@ services:
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
       - CUSTOMER_CHAT_URL=http://customer-chat-svc:8085
+      - PREDICTIVE_URL=http://predictive-svc:8085
+      - CREW_URL=http://crew-svc:8086
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-flightops}
@@ -122,6 +161,10 @@ services:
       ingest-svc:
         condition: service_started
       customer-chat-svc:
+        condition: service_started
+      predictive-svc:
+        condition: service_started
+      crew-svc:
         condition: service_started
     ports: ["8080:8080"]
 

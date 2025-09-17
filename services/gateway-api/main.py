@@ -22,6 +22,8 @@ RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://retrieval-svc:8081"
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 INGEST_URL = service.get_env_var("INGEST_URL", "http://ingest-svc:8084")
 CUSTOMER_CHAT_URL = service.get_env_var("CUSTOMER_CHAT_URL", "http://customer-chat-svc:8085")
+PREDICTIVE_URL = service.get_env_var("PREDICTIVE_URL", "http://predictive-svc:8085")
+CREW_URL = service.get_env_var("CREW_URL", "http://crew-svc:8086")
 
 # Database configuration
 DB_HOST = service.get_env_var("DB_HOST", "db")
@@ -999,4 +1001,99 @@ async def clear_all_data(request: Request):
         }
     except Exception as e:
         service.log_error(e, "clear_all_data endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Predictive Analytics Endpoints
+@app.post("/predict/disruptions")
+async def predict_disruptions(request: Request):
+    """Predict potential disruptions for flights"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{PREDICTIVE_URL}/predict_disruptions", json=await request.json())
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "predict_disruptions endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/predict/bulk")
+async def bulk_predict_disruptions(request: Request):
+    """Predict disruptions for all flights in the next 24 hours"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{PREDICTIVE_URL}/bulk_predict")
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "bulk_predict_disruptions endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Crew Management Endpoints
+@app.post("/crew/optimize")
+async def optimize_crew_assignments(request: Request):
+    """Optimize crew assignments for a flight"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{CREW_URL}/optimize_crew", json=await request.json())
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "optimize_crew_assignments endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/crew/suggest_swap")
+async def suggest_crew_swap(request: Request):
+    """Suggest crew replacement for unavailable crew member"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{CREW_URL}/suggest_crew_swap", json=await request.json())
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "suggest_crew_swap endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/crew/legality/{crew_id}")
+async def check_crew_legality(crew_id: str, flight_no: str, date: str, request: Request):
+    """Check legality of a specific crew member for a flight"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{CREW_URL}/crew_legality/{crew_id}?flight_no={flight_no}&date={date}")
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "check_crew_legality endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/crew/availability")
+async def get_crew_availability(date: str, role: Optional[str] = None, request: Request = None):
+    """Get available crew members for a specific date and role"""
+    try:
+        params = {"date": date}
+        if role:
+            params["role"] = role
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{CREW_URL}/crew_availability", params=params)
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "get_crew_availability endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Enhanced Communication Endpoints
+@app.post("/comms/multilingual")
+async def draft_multilingual_communication(request: Request):
+    """Generate communications in multiple languages"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{COMMS_URL}/draft_multilingual", json=await request.json())
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "draft_multilingual_communication endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/comms/analyze_sentiment")
+async def analyze_communication_sentiment(request: Request):
+    """Analyze sentiment of customer communication"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{COMMS_URL}/analyze_sentiment", json=await request.json())
+            return response.json()
+    except Exception as e:
+        service.log_error(e, "analyze_communication_sentiment endpoint")
         raise HTTPException(status_code=500, detail=str(e))

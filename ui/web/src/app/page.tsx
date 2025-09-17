@@ -6,7 +6,8 @@ import {
   Database, 
   Activity,
   ArrowRight,
-  Zap
+  Zap,
+  Users
 } from 'lucide-react'
 
 export default function HomePage() {
@@ -17,6 +18,20 @@ export default function HomePage() {
       icon: Plane,
       href: '/query',
       color: 'bg-black'
+    },
+    {
+      title: 'Predictive Analytics',
+      description: 'AI-powered disruption prediction and proactive management',
+      icon: Zap,
+      href: '/predictive',
+      color: 'bg-blue-600'
+    },
+    {
+      title: 'Crew Management',
+      description: 'Intelligent crew optimization and resource management',
+      icon: Users,
+      href: '/crew',
+      color: 'bg-green-600'
     },
     {
       title: 'Draft Communications',

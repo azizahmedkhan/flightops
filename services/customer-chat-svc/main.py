@@ -84,12 +84,15 @@ def create_chat_session(request: ChatSessionCreate, req: Request):
 
 @app.post("/chat/message")
 def send_chat_message(message: ChatMessage, req: Request):
-    """Send a message in a chat session"""
+    """Send a message in a chat session with sentiment analysis"""
     try:
         if message.session_id not in chat_sessions:
             raise HTTPException(status_code=404, detail="Chat session not found")
         
-        # Store customer message
+        # Analyze sentiment of customer message
+        sentiment_analysis = analyze_customer_sentiment(message.message, message.session_id)
+        
+        # Store customer message with sentiment data
         customer_msg = {
             "id": str(uuid.uuid4()),
             "type": "customer",
@@ -97,13 +100,17 @@ def send_chat_message(message: ChatMessage, req: Request):
             "timestamp": datetime.now().isoformat(),
             "customer_name": message.customer_name,
             "customer_email": message.customer_email,
-            "customer_phone": message.customer_phone
+            "customer_phone": message.customer_phone,
+            "sentiment": sentiment_analysis
         }
         
         message_history[message.session_id].append(customer_msg)
         
         # Get flight context for AI response
         session = chat_sessions[message.session_id]
+        
+        # Adjust response based on sentiment
+        response_tone = sentiment_analysis.get("recommended_tone", "empathetic")
         
         # Call agent service for AI response
         try:
@@ -119,22 +126,32 @@ def send_chat_message(message: ChatMessage, req: Request):
             
             if agent_response.status_code == 200:
                 agent_data = agent_response.json()
+                
+                # Enhance response with sentiment-aware communication
+                enhanced_response = enhance_response_with_sentiment(
+                    agent_data, sentiment_analysis, session
+                )
+                
                 ai_response = {
                     "id": str(uuid.uuid4()),
                     "type": "agent",
-                    "message": agent_data.get("answer", {}).get("issue", "I'm here to help with your flight inquiry."),
+                    "message": enhanced_response.get("message", "I'm here to help with your flight inquiry."),
                     "timestamp": datetime.now().isoformat(),
                     "flight_info": agent_data.get("tools_payload", {}).get("flight", {}),
                     "impact": agent_data.get("tools_payload", {}).get("impact", {}),
                     "options": agent_data.get("tools_payload", {}).get("options", []),
-                    "citations": agent_data.get("answer", {}).get("citations", [])
+                    "citations": agent_data.get("answer", {}).get("citations", []),
+                    "sentiment_aware": True,
+                    "response_tone": response_tone,
+                    "escalation_recommended": sentiment_analysis.get("urgency_level") == "high"
                 }
             else:
                 ai_response = {
                     "id": str(uuid.uuid4()),
                     "type": "agent",
                     "message": "I apologize, but I'm having trouble accessing flight information right now. Please try again later or contact our support team.",
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
+                    "sentiment_aware": False
                 }
         except Exception as e:
             service.log_error(e, "agent_call")
@@ -142,18 +159,30 @@ def send_chat_message(message: ChatMessage, req: Request):
                 "id": str(uuid.uuid4()),
                 "type": "agent",
                 "message": "I'm sorry, I'm experiencing technical difficulties. Please try again or contact our support team.",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "sentiment_aware": False
             }
         
         message_history[message.session_id].append(ai_response)
         chat_sessions[message.session_id]["last_activity"] = datetime.now().isoformat()
         
-        service.log_request(req, {"status": "success", "session_id": message.session_id})
+        # Update session with sentiment insights
+        if "sentiment_insights" not in chat_sessions[message.session_id]:
+            chat_sessions[message.session_id]["sentiment_insights"] = []
+        chat_sessions[message.session_id]["sentiment_insights"].append({
+            "timestamp": datetime.now().isoformat(),
+            "sentiment": sentiment_analysis.get("sentiment"),
+            "urgency": sentiment_analysis.get("urgency_level"),
+            "escalation_needed": sentiment_analysis.get("urgency_level") == "high"
+        })
+        
+        service.log_request(req, {"status": "success", "session_id": message.session_id, "sentiment": sentiment_analysis.get("sentiment")})
         return {
             "session_id": message.session_id,
             "customer_message": customer_msg,
             "ai_response": ai_response,
-            "message_count": len(message_history[message.session_id])
+            "message_count": len(message_history[message.session_id]),
+            "sentiment_analysis": sentiment_analysis
         }
         
     except HTTPException:
@@ -161,6 +190,97 @@ def send_chat_message(message: ChatMessage, req: Request):
     except Exception as e:
         service.log_error(e, "send_chat_message")
         raise HTTPException(status_code=500, detail="Failed to send message")
+
+def analyze_customer_sentiment(message: str, session_id: str) -> Dict[str, Any]:
+    """Analyze customer sentiment using comms service"""
+    try:
+        # Get session context
+        session = chat_sessions.get(session_id, {})
+        context = {
+            "flight_no": session.get("flight_no", "Unknown"),
+            "customer_name": session.get("customer_name", "Customer"),
+            "issue": "Customer inquiry"
+        }
+        
+        # Call comms service for sentiment analysis
+        sentiment_response = httpx.post(
+            f"{COMMS_URL}/analyze_sentiment",
+            json={
+                "text": message,
+                "context": context
+            },
+            timeout=15.0
+        )
+        
+        if sentiment_response.status_code == 200:
+            return sentiment_response.json()
+        else:
+            return analyze_sentiment_fallback(message)
+            
+    except Exception as e:
+        service.log_error(e, "sentiment_analysis")
+        return analyze_sentiment_fallback(message)
+
+def analyze_sentiment_fallback(message: str) -> Dict[str, Any]:
+    """Fallback sentiment analysis when comms service is unavailable"""
+    text_lower = message.lower()
+    
+    # Simple keyword-based analysis
+    positive_words = ["thank", "appreciate", "good", "excellent", "happy", "satisfied"]
+    negative_words = ["angry", "frustrated", "disappointed", "terrible", "awful", "hate", "complaint"]
+    urgent_words = ["urgent", "immediately", "asap", "emergency", "critical", "now"]
+    
+    positive_count = sum(1 for word in positive_words if word in text_lower)
+    negative_count = sum(1 for word in negative_words if word in text_lower)
+    urgent_count = sum(1 for word in urgent_words if word in text_lower)
+    
+    if negative_count > positive_count:
+        sentiment = "negative"
+        sentiment_score = -0.5 - (negative_count * 0.1)
+    elif positive_count > negative_count:
+        sentiment = "positive"
+        sentiment_score = 0.5 + (positive_count * 0.1)
+    else:
+        sentiment = "neutral"
+        sentiment_score = 0.0
+    
+    urgency = "high" if urgent_count > 0 else "medium" if negative_count > 2 else "low"
+    response_tone = "urgent" if sentiment == "negative" and urgency == "high" else "empathetic" if sentiment == "negative" else "professional"
+    
+    return {
+        "sentiment": sentiment,
+        "sentiment_score": max(-1.0, min(1.0, sentiment_score)),
+        "urgency_level": urgency,
+        "recommended_tone": response_tone,
+        "analysis_method": "fallback"
+    }
+
+def enhance_response_with_sentiment(agent_data: Dict[str, Any], sentiment_analysis: Dict[str, Any], 
+                                  session: Dict[str, Any]) -> Dict[str, Any]:
+    """Enhance AI response based on customer sentiment"""
+    base_message = agent_data.get("answer", {}).get("issue", "I'm here to help with your flight inquiry.")
+    sentiment = sentiment_analysis.get("sentiment", "neutral")
+    urgency = sentiment_analysis.get("urgency_level", "low")
+    
+    # Enhance message based on sentiment
+    if sentiment == "negative" and urgency == "high":
+        enhanced_message = f"I understand your frustration and I'm here to help resolve this immediately. {base_message}"
+    elif sentiment == "negative":
+        enhanced_message = f"I sincerely apologize for the inconvenience. {base_message}"
+    elif sentiment == "positive":
+        enhanced_message = f"Thank you for your patience. {base_message}"
+    else:
+        enhanced_message = base_message
+    
+    # Add escalation recommendation if needed
+    if urgency == "high":
+        enhanced_message += "\n\nI'm escalating this to our senior support team for immediate attention."
+    
+    return {
+        "message": enhanced_message,
+        "original_message": base_message,
+        "enhancement_applied": True
+    }
 
 @app.get("/chat/session/{session_id}")
 def get_chat_session(session_id: str, req: Request):

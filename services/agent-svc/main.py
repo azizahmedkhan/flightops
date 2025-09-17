@@ -21,6 +21,7 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://localhost:8081")
 COMMS_URL = service.get_env_var("COMMS_URL", "http://localhost:8083")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
 
 class Ask(BaseModel):
@@ -115,8 +116,8 @@ def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
                 })
     return crew_members
 
-def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
-    """Generate rebooking options based on passenger count and route type."""
+def tool_advanced_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[str, Any]]:
+    """Advanced rebooking optimization with LLM-powered analysis."""
     # Get passenger count and connection details
     impact = tool_impact_assessor(flight_no, date)
     pax_count = impact.get("passengers", 0)
@@ -127,12 +128,55 @@ def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
     origin = flight.get("origin", "")
     destination = flight.get("destination", "")
     
+    # Get passenger preferences and loyalty data (mock)
+    passenger_profiles = get_passenger_profiles(flight_no, date)
+    
     # Determine if domestic or international
     is_domestic = origin in ["AKL", "WLG", "CHC"] and destination in ["AKL", "WLG", "CHC"]
     
+    # Generate base options
+    options = generate_base_rebooking_options(flight_no, date, pax_count, connecting_pax, is_domestic)
+    
+    # Use LLM to optimize and rank options
+    if OPENAI_API_KEY:
+        optimized_options = optimize_rebooking_with_llm(options, passenger_profiles, flight, impact)
+    else:
+        optimized_options = optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+    
+    return optimized_options[:5]  # Return top 5 options
+
+def get_passenger_profiles(flight_no: str, date: str) -> List[Dict[str, Any]]:
+    """Get passenger profiles and preferences (mock data)"""
+    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT pnr, passenger_name, has_connection, connecting_flight_no
+                FROM bookings
+                WHERE flight_no = %s AND flight_date = %s
+            """, (flight_no, date))
+            bookings = cur.fetchall()
+    
+    profiles = []
+    for pnr, name, has_connection, connecting_flight in bookings:
+        # Mock passenger profile data
+        profiles.append({
+            "pnr": pnr,
+            "name": name,
+            "has_connection": has_connection == "TRUE",
+            "connecting_flight": connecting_flight,
+            "loyalty_tier": "Gold" if "VIP" in name else "Silver" if "Premium" in name else "Bronze",
+            "preferences": ["window_seat", "early_departure"] if "Early" in name else ["aisle_seat"],
+            "special_needs": ["wheelchair"] if "Access" in name else [],
+            "travel_purpose": "business" if "Corp" in name else "leisure"
+        })
+    
+    return profiles
+
+def generate_base_rebooking_options(flight_no: str, date: str, pax_count: int, connecting_pax: int, is_domestic: bool) -> List[Dict[str, Any]]:
+    """Generate base rebooking options"""
     options = []
     
-    # Base option: Next available flight
+    # Option 1: Next available flight
     if is_domestic:
         base_plan = "Rebook on next available NZ domestic service + meal voucher"
         if connecting_pax > 0:
@@ -141,7 +185,10 @@ def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
             "plan": base_plan,
             "cx_score": 0.85,
             "cost_estimate": 80 * pax_count,
-            "notes": "Minimizes missed connections, domestic route"
+            "notes": "Minimizes missed connections, domestic route",
+            "passenger_impact": "Low",
+            "implementation_time": "30 minutes",
+            "success_probability": 0.9
         })
     else:
         base_plan = "Rebook on next available NZ international service + meal voucher"
@@ -151,43 +198,193 @@ def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
             "plan": base_plan,
             "cx_score": 0.82,
             "cost_estimate": 120 * pax_count,
-            "notes": "International route, higher cost but better service"
+            "notes": "International route, higher cost but better service",
+            "passenger_impact": "Low",
+            "implementation_time": "45 minutes",
+            "success_probability": 0.85
         })
     
-    # High passenger count option: Split across carriers
+    # Option 2: Split across carriers (for high passenger count)
     if pax_count >= 50:
         options.append({
             "plan": f"Split {pax_count} passengers across NZ + partner airline",
             "cx_score": 0.75,
             "cost_estimate": 60 * pax_count,
-            "notes": "High passenger count, cost-effective but more complex"
+            "notes": "High passenger count, cost-effective but more complex",
+            "passenger_impact": "Medium",
+            "implementation_time": "2 hours",
+            "success_probability": 0.7
         })
     else:
-        # Low passenger count option: Direct rebooking
+        # Direct rebooking for low passenger count
         options.append({
             "plan": "Direct rebooking on next NZ service + compensation",
             "cx_score": 0.88,
             "cost_estimate": 100 * pax_count,
-            "notes": "Low passenger count, premium service"
+            "notes": "Low passenger count, premium service",
+            "passenger_impact": "Low",
+            "implementation_time": "20 minutes",
+            "success_probability": 0.95
         })
     
-    # Third option: Flexible rebooking with connection protection
+    # Option 3: Flexible rebooking
     if connecting_pax > 0:
         options.append({
             "plan": f"Flexible rebooking within 48h + connection protection for {connecting_pax} passengers + accommodation if needed",
             "cx_score": 0.80,
             "cost_estimate": 90 * pax_count + 50 * connecting_pax,
-            "notes": "Balanced approach with connection protection"
+            "notes": "Balanced approach with connection protection",
+            "passenger_impact": "Low",
+            "implementation_time": "1 hour",
+            "success_probability": 0.8
         })
     else:
         options.append({
             "plan": "Flexible rebooking within 48h + accommodation if needed",
             "cx_score": 0.80,
             "cost_estimate": 90 * pax_count,
-            "notes": "Balanced approach, good for mixed passenger needs"
+            "notes": "Balanced approach, good for mixed passenger needs",
+            "passenger_impact": "Low",
+            "implementation_time": "45 minutes",
+            "success_probability": 0.85
         })
     
-    return options[:3]  # Return top 3 options
+    # Option 4: Premium rebooking (for high-value passengers)
+    vip_passengers = len([p for p in get_passenger_profiles(flight_no, date) if p["loyalty_tier"] in ["Gold", "Platinum"]])
+    if vip_passengers > 0:
+        options.append({
+            "plan": f"Premium rebooking for {vip_passengers} VIP passengers + standard rebooking for others",
+            "cx_score": 0.92,
+            "cost_estimate": 150 * vip_passengers + 80 * (pax_count - vip_passengers),
+            "notes": "VIP passengers get priority treatment and premium options",
+            "passenger_impact": "Very Low",
+            "implementation_time": "1.5 hours",
+            "success_probability": 0.9
+        })
+    
+    # Option 5: Alternative routing
+    # Get flight details to determine origin and destination
+    try:
+        flight_details = get_flight_details(flight_no, date)
+        origin = flight_details.get("origin", "AKL")
+        destination = flight_details.get("destination", "SYD")
+    except:
+        # Fallback to default values if flight details not available
+        origin = "AKL"
+        destination = "SYD"
+    
+    options.append({
+        "plan": f"Alternative routing via {get_alternative_hub(origin, destination)} + ground transport",
+        "cx_score": 0.70,
+        "cost_estimate": 70 * pax_count,
+        "notes": "Alternative routing may require ground transport",
+        "passenger_impact": "Medium",
+        "implementation_time": "3 hours",
+        "success_probability": 0.6
+    })
+    
+    return options
+
+def get_alternative_hub(origin: str, destination: str) -> str:
+    """Get alternative hub for routing (mock)"""
+    hubs = {
+        "AKL": "SYD",
+        "WLG": "AKL", 
+        "CHC": "AKL",
+        "SYD": "AKL",
+        "LAX": "SFO"
+    }
+    return hubs.get(origin, "AKL")
+
+def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profiles: List[Dict[str, Any]], 
+                               flight: Dict[str, Any], impact: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Use LLM to optimize rebooking options"""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        prompt = f"""
+        Optimize these airline rebooking options based on passenger profiles and flight context:
+        
+        Flight: {flight.get('flight_no')} from {flight.get('origin')} to {flight.get('destination')}
+        Impact: {impact.get('summary')}
+        Passenger Profiles: {len(passenger_profiles)} passengers, {len([p for p in passenger_profiles if p['loyalty_tier'] in ['Gold', 'Platinum']])} VIP
+        
+        Current Options:
+        {json.dumps(options, indent=2)}
+        
+        Optimize by:
+        1. Adjusting customer experience scores based on passenger preferences
+        2. Refining cost estimates based on passenger mix
+        3. Improving success probabilities based on historical data
+        4. Adding personalized recommendations
+        5. Ranking by overall value (CX score vs cost)
+        
+        Return optimized options as JSON array, maintaining the same structure.
+        """
+        
+        response = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        
+        content = response.choices[0].message.content
+        try:
+            optimized = json.loads(content)
+            # Ensure we have the required fields
+            for option in optimized:
+                if "cx_score" not in option:
+                    option["cx_score"] = 0.8
+                if "cost_estimate" not in option:
+                    option["cost_estimate"] = 100
+                if "success_probability" not in option:
+                    option["success_probability"] = 0.8
+            
+            return optimized
+        except json.JSONDecodeError:
+            return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+            
+    except Exception as e:
+        service.log_error(e, "LLM rebooking optimization")
+        return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+
+def optimize_rebooking_rule_based(options: List[Dict[str, Any]], passenger_profiles: List[Dict[str, Any]], 
+                                 flight: Dict[str, Any], impact: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Rule-based rebooking optimization fallback"""
+    vip_count = len([p for p in passenger_profiles if p["loyalty_tier"] in ["Gold", "Platinum"]])
+    connecting_count = len([p for p in passenger_profiles if p["has_connection"]])
+    
+    # Adjust scores based on passenger mix
+    for option in options:
+        # Boost VIP options
+        if "VIP" in option["plan"] or "premium" in option["plan"].lower():
+            option["cx_score"] += 0.05 * vip_count
+        
+        # Boost connection protection
+        if "connection" in option["plan"].lower():
+            option["cx_score"] += 0.03 * connecting_count
+        
+        # Adjust cost based on passenger count
+        base_cost = option["cost_estimate"]
+        if len(passenger_profiles) > 100:
+            option["cost_estimate"] = base_cost * 0.9  # Volume discount
+        elif len(passenger_profiles) < 20:
+            option["cost_estimate"] = base_cost * 1.1  # Small group premium
+    
+    # Sort by value (CX score / cost ratio)
+    for option in options:
+        if option["cost_estimate"] > 0:
+            option["value_score"] = option["cx_score"] / (option["cost_estimate"] / 100)
+        else:
+            option["value_score"] = option["cx_score"]
+    
+    options.sort(key=lambda x: x["value_score"], reverse=True)
+    return options
+
+def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
+    """Generate rebooking options - now uses advanced optimizer"""
+    return tool_advanced_rebooking_optimizer(flight_no, date)
 
 def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
     try:
