@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
+from prompt_manager import PromptManager
 from fastapi import Request
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
@@ -89,11 +90,7 @@ def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         
-        prompt = f"""Rewrite this airline communication to be more {tone} while keeping all factual information intact:
-
-{template_text}
-
-Make it sound more {tone} but keep the same structure and all details."""
+        prompt = PromptManager.get_tone_rewrite_prompt(template_text, tone)
         
         resp = client.chat.completions.create(
             model=CHAT_MODEL, 
@@ -116,27 +113,7 @@ def translate_communication(text: str, target_language: str, context: Dict[str, 
         # Get cultural context for the language
         cultural_context = get_cultural_context(target_language)
         
-        prompt = f"""Translate this airline communication to {target_language} with appropriate cultural adaptation:
-
-Original text:
-{text}
-
-Context:
-- Flight: {context.get('flight_no', 'Unknown')}
-- Issue: {context.get('issue', 'operational delay')}
-- Customer: {context.get('customer_name', 'Valued Customer')}
-
-Cultural considerations for {target_language}:
-{cultural_context}
-
-Requirements:
-1. Maintain professional airline tone
-2. Adapt to cultural communication style
-3. Keep all factual information accurate
-4. Use appropriate formality level
-5. Include relevant cultural references if appropriate
-
-Return only the translated text."""
+        prompt = PromptManager.get_translation_prompt(text, target_language, context, cultural_context)
         
         resp = client.chat.completions.create(
             model=CHAT_MODEL,
@@ -318,21 +295,7 @@ def analyze_sentiment_with_llm(text: str, context: Optional[Dict[str, Any]] = No
         if context:
             context_str = f"Context: Flight {context.get('flight_no', 'Unknown')}, Issue: {context.get('issue', 'Unknown')}"
         
-        prompt = f"""Analyze the sentiment of this customer communication:
-
-{text}
-
-{context_str}
-
-Provide:
-1. Sentiment (positive/neutral/negative)
-2. Sentiment score (-1.0 to 1.0)
-3. Key emotions detected (list)
-4. Urgency level (low/medium/high)
-5. Recommended response tone (empathetic/professional/urgent)
-6. Key concerns (list)
-
-Format as JSON."""
+        prompt = PromptManager.get_sentiment_analysis_prompt(text, context)
         
         response = client.chat.completions.create(
             model=CHAT_MODEL,

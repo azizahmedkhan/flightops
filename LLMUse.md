@@ -294,3 +294,330 @@ All services are:
 5. **Scale**: Add more data and integrate with real airline systems
 
 The implementation provides a complete AI-powered flight operations management system that can handle everything from proactive disruption prediction to intelligent crew management and empathetic customer communication - all while saving significant time and improving operational efficiency!
+
+
+## 🚀 **Current `/query` Functionality**
+
+The `/query` endpoint is actually implemented as `/ask` in the agent service and provides a comprehensive flight disruption analysis system. Here's how it works:
+
+### **Architecture Flow of /query:**
+1. **Frontend** (`/ui/web/src/app/query/page.tsx`) - React form that collects:
+   - Question about flight disruption
+   - Flight number (e.g., "NZ123")
+   - Date
+
+2. **Gateway API** (`/services/gateway-api/main.py`) - Routes requests to agent service
+
+3. **Agent Service** (`/services/agent-svc/main.py`) - Core LLM-powered analysis
+
+### **LLM Integration Points:**
+
+The system leverages LLM in several sophisticated ways:
+
+#### 1. **Rebooking Optimization** (`optimize_rebooking_with_llm`)
+```python
+# Uses OpenAI GPT to optimize rebooking options based on:
+# - Passenger profiles and loyalty tiers
+# - Flight context and impact
+# - Cost vs. customer experience trade-offs
+# - Historical data patterns
+```
+
+#### 2. **Policy Grounding** (`tool_policy_grounder`)
+- Uses retrieval service to find relevant policy documents
+- Ensures responses are grounded in actual airline policies
+- Prevents hallucination by requiring citations
+
+#### 3. **Sentiment Analysis** (in comms service)
+- Analyzes customer communication sentiment
+- Adjusts response tone based on emotional state
+- Provides escalation recommendations
+
+#### 4. **Crew Analysis** (in crew service)
+- LLM-powered crew situation analysis
+- Risk assessment and recommendations
+- Replacement crew suggestions
+
+### **Current Capabilities:**
+- **Flight Lookup**: Real-time flight status and details
+- **Impact Assessment**: Passenger/crew counts, connection analysis
+- **Rebooking Options**: 5+ optimized rebooking strategies with CX scores
+- **Policy Citations**: Grounded responses with policy references
+- **Crew Details**: Comprehensive crew information
+- **Cost Analysis**: Detailed cost estimates for each option
+
+
+## **Current LLM Usage Patterns:**
+
+### **Strengths:**
+1. **Hybrid Approach**: Combines LLM with rule-based fallbacks
+2. **Policy Grounding**: Prevents hallucination through retrieval-augmented generation
+3. **Multi-Service Integration**: LLM used across multiple specialized services
+4. **Graceful Degradation**: Falls back to rule-based systems when LLM unavailable
+
+### **Current Limitations:**
+1. **Limited Context**: LLM calls are isolated, not conversational
+2. **No Memory**: Each query is independent
+3. **Basic Prompting**: Simple prompts without few-shot examples
+4. **No Streaming**: Responses are generated all at once
+5. **Limited Personalization**: Basic passenger profiling
+
+
+[1 tool called]
+
+## **Key Improvement Areas:**
+
+### **1. LLM Architecture Issues:**
+- **No conversation memory** - each query is independent
+- **Limited context window utilization** - not leveraging full conversation history
+- **Basic prompt engineering** - could benefit from few-shot learning
+- **No streaming responses** - poor user experience for long responses
+
+### **2. Data Integration Gaps:**
+- **Limited real-time data** - relies on static CSV data
+- **No weather integration** - missing crucial disruption context
+- **Basic passenger profiling** - mock data instead of real customer data
+- **No historical learning** - doesn't learn from past disruptions
+
+### **3. User Experience Limitations:**
+- **No follow-up questions** - can't ask clarifying questions
+- **Static response format** - not adaptive to user needs
+- **No multi-modal support** - text-only interface
+- **Limited personalization** - generic responses
+
+
+[1 tool called]
+
+## **Comprehensive Improvement Recommendations:**
+
+### **�� Immediate Improvements (High Impact, Low Effort):**
+
+#### **1. Enhanced Prompt Engineering**
+```python
+# Add few-shot examples and better context
+SYSTEM_PROMPT = """
+You are an expert airline operations analyst. Use these examples:
+
+Example 1:
+Question: "What's the impact of delay on NZ123?"
+Context: Weather delay, 150 passengers, 8 crew
+Response: "NZ123 has 150 passengers (45 with connections) and 8 crew affected. 
+Weather delay expected 2-3 hours. Recommend Option A: Next available flight + meal vouchers."
+
+Example 2:
+Question: "Best rebooking for VIP passengers?"
+Context: 5 Gold members, 145 regular passengers
+Response: "For 5 VIP passengers: Premium rebooking with lounge access. 
+For others: Standard rebooking. Total cost: $1,200."
+"""
+```
+
+#### **2. Streaming Responses**
+```python
+# Add streaming to agent service
+@app.post("/ask/stream")
+async def ask_stream(body: Ask, request: Request):
+    async def generate():
+        # Stream flight lookup
+        yield f"data: {json.dumps({'type': 'flight', 'data': flight_data})}\n\n"
+        # Stream impact analysis
+        yield f"data: {json.dumps({'type': 'impact', 'data': impact_data})}\n\n"
+        # Stream rebooking options
+        for option in options:
+            yield f"data: {json.dumps({'type': 'option', 'data': option})}\n\n"
+```
+
+#### **3. Conversation Memory**
+```python
+# Add session-based conversation memory
+class ConversationSession:
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.messages = []
+        self.context = {}
+    
+    def add_message(self, role: str, content: str):
+        self.messages.append({"role": role, "content": content})
+    
+    def get_context(self) -> str:
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in self.messages[-10:]])
+```
+
+### **🔧 Medium-term Improvements (High Impact, Medium Effort):**
+
+#### **4. Advanced LLM Integration**
+```python
+# Multi-step reasoning with tool calling
+def advanced_query_analysis(question: str, context: Dict) -> Dict:
+    tools = [
+        {"name": "flight_lookup", "description": "Get flight details"},
+        {"name": "impact_analysis", "description": "Analyze passenger impact"},
+        {"name": "policy_search", "description": "Find relevant policies"},
+        {"name": "rebooking_optimizer", "description": "Generate rebooking options"}
+    ]
+    
+    # Use OpenAI function calling for structured reasoning
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": question}],
+        tools=[{"type": "function", "function": tool} for tool in tools],
+        tool_choice="auto"
+    )
+```
+
+#### **5. Real-time Data Integration**
+```python
+# Add weather and real-time data sources
+def get_real_time_context(flight_no: str, date: str) -> Dict:
+    return {
+        "weather": get_weather_data(flight_no, date),
+        "air_traffic": get_atc_delays(flight_no, date),
+        "airport_status": get_airport_conditions(flight_no, date),
+        "crew_availability": get_crew_roster_status(flight_no, date)
+    }
+```
+
+#### **6. Enhanced Personalization**
+```python
+# Advanced passenger profiling
+class PassengerProfile:
+    def __init__(self, pnr: str):
+        self.loyalty_tier = self.get_loyalty_tier(pnr)
+        self.preferences = self.get_preferences(pnr)
+        self.travel_history = self.get_travel_history(pnr)
+        self.communication_preferences = self.get_comm_prefs(pnr)
+    
+    def get_personalized_options(self, base_options: List) -> List:
+        # Use LLM to personalize based on profile
+        return self.llm_personalize(base_options, self.to_dict())
+```
+
+### **🎯 Long-term Improvements (High Impact, High Effort):**
+
+#### **7. Multi-Modal Interface**
+```python
+# Add voice and image support
+@app.post("/query/multimodal")
+async def multimodal_query(
+    text: Optional[str] = None,
+    audio: Optional[UploadFile] = None,
+    image: Optional[UploadFile] = None
+):
+    if audio:
+        text = await transcribe_audio(audio)
+    if image:
+        context = await analyze_image(image)
+    
+    return await process_query(text, context)
+```
+
+#### **8. Predictive Analytics Integration**
+```python
+# Use LLM for predictive insights
+def predict_disruption_impact(flight_no: str, date: str) -> Dict:
+    historical_data = get_historical_patterns(flight_no)
+    weather_forecast = get_weather_forecast(flight_no, date)
+    crew_availability = get_crew_forecast(flight_no, date)
+    
+    prompt = f"""
+    Based on historical patterns, weather, and crew data, predict:
+    1. Likelihood of delay (0-100%)
+    2. Expected delay duration
+    3. Passenger impact severity
+    4. Recommended proactive measures
+    """
+    
+    return llm_analyze(prompt, {
+        "historical": historical_data,
+        "weather": weather_forecast,
+        "crew": crew_availability
+    })
+```
+
+#### **9. Learning and Adaptation**
+```python
+# Implement feedback loop for continuous improvement
+class QueryLearningSystem:
+    def __init__(self):
+        self.feedback_store = FeedbackStore()
+        self.model_fine_tuner = ModelFineTuner()
+    
+    def collect_feedback(self, query_id: str, rating: int, comments: str):
+        self.feedback_store.store(query_id, rating, comments)
+    
+    def improve_responses(self):
+        # Use feedback to improve prompts and responses
+        feedback_data = self.feedback_store.get_recent_feedback()
+        self.model_fine_tuner.update_prompts(feedback_data)
+```
+
+### **📊 Performance Optimizations:**
+
+#### **10. Caching and Optimization**
+```python
+# Add intelligent caching
+@lru_cache(maxsize=1000)
+def cached_flight_lookup(flight_no: str, date: str) -> Dict:
+    return tool_flight_lookup(flight_no, date)
+
+# Parallel processing for independent operations
+async def parallel_analysis(flight_no: str, date: str):
+    tasks = [
+        tool_flight_lookup(flight_no, date),
+        tool_impact_assessor(flight_no, date),
+        tool_crew_details(flight_no, date),
+        get_weather_data(flight_no, date)
+    ]
+    return await asyncio.gather(*tasks)
+```
+
+### **🔒 Security and Compliance:**
+
+#### **11. Enhanced PII Protection**
+```python
+# Advanced PII scrubbing with LLM
+def advanced_pii_scrub(text: str) -> str:
+    # Use LLM to identify and scrub PII more accurately
+    prompt = f"Identify and redact PII from: {text}"
+    return llm_scrub_pii(prompt)
+```
+
+#### **12. Audit and Compliance**
+```python
+# Add comprehensive logging and audit trails
+class QueryAuditor:
+    def log_query(self, query: str, response: str, user_id: str):
+        self.audit_log.store({
+            "timestamp": datetime.now(),
+            "query": self.scrub_pii(query),
+            "response_hash": hashlib.sha256(response.encode()).hexdigest(),
+            "user_id": user_id,
+            "compliance_flags": self.check_compliance(response)
+        })
+```
+
+
+[1 tool called]
+
+## **Summary**
+
+The `/query` endpoint is a sophisticated flight disruption analysis system that leverages LLM in multiple ways:
+
+### **Current Strengths:**
+- ✅ **Policy-grounded responses** with citations
+- ✅ **Multi-service LLM integration** across specialized domains
+- ✅ **Graceful fallback** to rule-based systems
+- ✅ **Comprehensive data integration** (flight, crew, passenger data)
+- ✅ **Cost-benefit analysis** for rebooking options
+
+### **Key Improvement Opportunities:**
+1. **Conversation Memory** - Enable follow-up questions and context retention
+2. **Streaming Responses** - Better user experience with real-time updates
+3. **Enhanced Prompting** - Few-shot learning and better context utilization
+4. **Real-time Data** - Weather, ATC, and live operational data integration
+5. **Personalization** - Advanced passenger profiling and customized responses
+6. **Multi-modal Support** - Voice and image input capabilities
+7. **Predictive Analytics** - Proactive disruption prediction and mitigation
+8. **Learning System** - Continuous improvement through feedback loops
+
+The system has a solid foundation but could significantly benefit from these enhancements to provide a more intelligent, personalized, and responsive query experience for airline operations teams.

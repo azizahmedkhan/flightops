@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
+from prompt_manager import PromptManager
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -303,25 +304,7 @@ def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profile
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         
-        prompt = f"""
-        Optimize these airline rebooking options based on passenger profiles and flight context:
-        
-        Flight: {flight.get('flight_no')} from {flight.get('origin')} to {flight.get('destination')}
-        Impact: {impact.get('summary')}
-        Passenger Profiles: {len(passenger_profiles)} passengers, {len([p for p in passenger_profiles if p['loyalty_tier'] in ['Gold', 'Platinum']])} VIP
-        
-        Current Options:
-        {json.dumps(options, indent=2)}
-        
-        Optimize by:
-        1. Adjusting customer experience scores based on passenger preferences
-        2. Refining cost estimates based on passenger mix
-        3. Improving success probabilities based on historical data
-        4. Adding personalized recommendations
-        5. Ranking by overall value (CX score vs cost)
-        
-        Return optimized options as JSON array, maintaining the same structure.
-        """
+        prompt = PromptManager.get_rebooking_optimization_prompt(flight, impact, passenger_profiles, options)
         
         response = client.chat.completions.create(
             model=CHAT_MODEL,

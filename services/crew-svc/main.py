@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
+from prompt_manager import PromptManager
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -196,21 +197,7 @@ def generate_llm_crew_analysis(crew_data: Dict[str, Any], disruption_context: st
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         
-        prompt = f"""
-        Analyze this crew situation for airline operations:
-        
-        Disruption Context: {disruption_context}
-        Crew Data: {json.dumps(crew_data, indent=2)}
-        
-        Provide:
-        1. Risk assessment (low/medium/high)
-        2. Key concerns (list)
-        3. Recommended actions (list)
-        4. Priority level (1-5)
-        5. Estimated resolution time
-        
-        Format as JSON.
-        """
+        prompt = PromptManager.get_crew_analysis_prompt(crew_data, disruption_context)
         
         response = client.chat.completions.create(
             model=CHAT_MODEL,

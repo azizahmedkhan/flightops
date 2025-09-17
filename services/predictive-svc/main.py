@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
+from prompt_manager import PromptManager
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -160,27 +161,9 @@ def generate_llm_insights(flight_data: Dict[str, Any], weather_data: Dict[str, A
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         
-        prompt = f"""
-        Analyze this flight operation data and predict potential disruptions:
-        
-        Flight: {flight_data.get('flight_no', 'Unknown')} on {flight_data.get('date', 'Unknown')}
-        Route: {flight_data.get('origin', 'Unknown')} to {flight_data.get('destination', 'Unknown')}
-        
-        Weather at origin: {weather_data}
-        Crew analysis: {crew_analysis}
-        Aircraft status: {aircraft_analysis}
-        Historical patterns: {historical_data}
-        
-        Provide:
-        1. Risk level (low/medium/high/critical)
-        2. Risk score (0.0-1.0)
-        3. Most likely disruption type
-        4. Confidence level (0.0-1.0)
-        5. Key risk factors (list)
-        6. Recommendations (list)
-        
-        Format as JSON.
-        """
+        prompt = PromptManager.get_disruption_prediction_prompt(
+            flight_data, weather_data, crew_analysis, aircraft_analysis, historical_data
+        )
         
         response = client.chat.completions.create(
             model=CHAT_MODEL,
