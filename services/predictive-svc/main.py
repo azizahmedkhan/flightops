@@ -1,15 +1,21 @@
 import sys
 import os
+import json
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+
+import httpx
+import pandas as pd
+import psycopg
+from fastapi import HTTPException, Request
+from pydantic import BaseModel
+from psycopg_pool import ConnectionPool
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
-from fastapi import HTTPException, Request
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import psycopg, httpx, json
-from datetime import datetime, timedelta
-import pandas as pd
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -24,6 +30,10 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
+
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
 
 class PredictionRequest(BaseModel):
     flight_no: Optional[str] = None
@@ -43,6 +53,23 @@ class DisruptionPrediction(BaseModel):
     factors: List[str]
     recommendations: List[str]
     time_to_disruption: Optional[str] = None
+
+@asynccontextmanager
+async def lifespan(app):
+    global db_pool
+    log_startup("predictive-svc")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
+    yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
+
+# Set lifespan for the app
+app.router.lifespan_context = lifespan
 
 def get_weather_data(airport: str, date: str) -> Dict[str, Any]:
     """Mock weather data - in production, integrate with weather API"""
@@ -94,7 +121,7 @@ def analyze_crew_fatigue(crew_details: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def analyze_aircraft_status(tail_number: str) -> Dict[str, Any]:
     """Analyze aircraft maintenance and availability"""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT status, current_location
@@ -126,7 +153,7 @@ def analyze_aircraft_status(tail_number: str) -> Dict[str, Any]:
 
 def get_historical_patterns(flight_no: str, days_back: int = 30) -> Dict[str, Any]:
     """Analyze historical delay patterns for a flight"""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get historical data (mock - in production, use actual historical data)
             cur.execute("""
@@ -261,7 +288,7 @@ def predict_disruptions(req: PredictionRequest, request: Request):
             date = req.date or datetime.now().strftime("%Y-%m-%d")
             
             # Get flight data
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
@@ -290,7 +317,7 @@ def predict_disruptions(req: PredictionRequest, request: Request):
             crew_analysis = {"risk_level": "low", "factors": [], "total_crew": 0, "at_risk_crew": 0}
             if req.include_crew:
                 # Get crew details
-                with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+                with db_pool.connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute("""
                             SELECT cr.crew_id, cr.crew_role, cd.crew_name, cd.duty_start_time, cd.max_duty_hours
@@ -352,7 +379,7 @@ def bulk_predict_disruptions(request: Request):
             tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
             
             # Get all flights for tomorrow
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         SELECT flight_no, origin, destination, sched_dep_time, status, tail_number

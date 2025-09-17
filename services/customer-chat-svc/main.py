@@ -1,15 +1,17 @@
 import sys
 import os
+import json
+import uuid
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+
+import httpx
+from fastapi import Request, HTTPException
+from pydantic import BaseModel
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
-from fastapi import Request, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-import httpx
-import json
-from datetime import datetime
-import uuid
 
 # Initialize base service
 service = BaseService("customer-chat-svc", "1.0.0")

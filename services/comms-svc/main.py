@@ -1,15 +1,17 @@
 import sys
 import os
+import re
+from typing import Dict, Any, List, Optional
+
+from fastapi import Request
+from jinja2 import Template
+from pydantic import BaseModel
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
-from fastapi import Request
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
 from utils import REQUEST_COUNT, LATENCY, log_startup
-from jinja2 import Template
-import re
 
 # Initialize base service
 service = BaseService("comms-svc", "1.0.0")

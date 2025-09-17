@@ -1,16 +1,20 @@
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+import json
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any, Optional
 
-from base_service import BaseService
+import httpx
+import psycopg
 from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
 from psycopg.errors import UndefinedTable
-import httpx
-import psycopg
-import json
+from psycopg_pool import ConnectionPool
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+
+from base_service import BaseService
 
 # Initialize base service
 service = BaseService("gateway-api", "1.0.0")
@@ -35,6 +39,10 @@ DB_PASS = service.get_env_var("DB_PASS", "postgres")
 # Embedding configuration
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
+
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
 
 def embed(text: str) -> List[float]:
     """Generate embeddings if API key is available, otherwise return deterministic fake vectors."""
@@ -95,16 +103,27 @@ class Policy(BaseModel):
     meta: Dict[str, Any]
     embedding: Optional[List[float]] = None
 
+@asynccontextmanager
+async def lifespan(app):
+    global db_pool
+    from utils import log_startup
+    log_startup("gateway-api")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
+    yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
+
+# Set lifespan for the app
+app.router.lifespan_context = lifespan
+
 # Database helper functions
 def get_db_connection():
-    return psycopg.connect(
-        host=DB_HOST, 
-        port=DB_PORT, 
-        dbname=DB_NAME, 
-        user=DB_USER, 
-        password=DB_PASS, 
-        autocommit=True
-    )
+    return db_pool.connection()
 
 def _execute_with_recovery(operation):
     try:
@@ -117,6 +136,7 @@ def _execute_with_recovery(operation):
 def execute_query(query: str, params: tuple = None) -> List[Dict[str, Any]]:
     def run():
         with get_db_connection() as conn:
+            conn.autocommit = True
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 if cur.description:
@@ -130,6 +150,7 @@ def execute_query(query: str, params: tuple = None) -> List[Dict[str, Any]]:
 def execute_insert(query: str, params: tuple) -> int:
     def run():
         with get_db_connection() as conn:
+            conn.autocommit = True
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 return cur.rowcount
@@ -140,6 +161,7 @@ def execute_insert(query: str, params: tuple) -> int:
 def execute_update(query: str, params: tuple) -> int:
     def run():
         with get_db_connection() as conn:
+            conn.autocommit = True
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 return cur.rowcount
@@ -150,6 +172,7 @@ def execute_update(query: str, params: tuple) -> int:
 def execute_delete(query: str, params: tuple) -> int:
     def run():
         with get_db_connection() as conn:
+            conn.autocommit = True
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 return cur.rowcount

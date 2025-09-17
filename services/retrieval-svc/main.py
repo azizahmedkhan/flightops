@@ -1,18 +1,22 @@
 import sys
 import os
+import json
+import math
+import re
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any, Tuple
+
+import httpx
+import psycopg
+from fastapi import Request
+from pydantic import BaseModel
+from psycopg_pool import ConnectionPool
+from rank_bm25 import BM25Okapi
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
-from fastapi import Request
-from pydantic import BaseModel
-import json, math
-from typing import List, Dict, Any, Tuple
-import psycopg
-import httpx
 from utils import REQUEST_COUNT, LATENCY, log_startup
-from contextlib import asynccontextmanager
-from rank_bm25 import BM25Okapi
-import re
 
 # Initialize base service
 service = BaseService("retrieval-svc", "1.0.0")
@@ -26,11 +30,21 @@ DB_PASS = service.get_env_var("DB_PASS", "postgres")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
+
 @asynccontextmanager
 async def lifespan(app):
+    global db_pool
     log_startup("retrieval-svc")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
     # init tables
-    with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS,autocommit=True) as conn:
+    with db_pool.connection() as conn:
+        conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS docs(
@@ -46,6 +60,10 @@ async def lifespan(app):
             );
             """)
     yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
 
 # Create app with lifespan
 app = service.get_app()
@@ -66,10 +84,10 @@ def embed(text: str) -> List[float]:
         except Exception as e:
             service.log_error(e, "embedding generation")
             # Fall through to fake vectors
-    # fallback: deterministic fake vector
-    import random, hashlib
-    random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
-    return [random.random() for _ in range(1536)]
+    # # fallback: deterministic fake vector
+    # import random, hashlib
+    # random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
+    # return [random.random() for _ in range(1536)]
 
 def tokenize(text: str) -> List[str]:
     """Simple tokenization for BM25."""
@@ -95,35 +113,58 @@ def get_bm25_scores(query: str, documents: List[Dict[str, Any]]) -> List[Tuple[i
 
 def get_vector_scores(query: str, k: int) -> List[Tuple[int, float]]:
     """Get vector similarity scores using pgvector."""
-    vec = embed(query)
-    
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
-        with conn.cursor() as cur:
-            # Check if embeddings are available
-            cur.execute("SELECT COUNT(*) FROM doc_embeddings")
-            cnt = cur.fetchone()[0]
-            
-            if cnt == 0:
-                return []
-            
-            # Create temp table for query vector
-            cur.execute("CREATE TEMP TABLE tmp_query(q vector(1536));")
-            cur.execute("INSERT INTO tmp_query VALUES (%s)", (vec,))
-            
-            # Get vector similarity scores
-            cur.execute("""
-                SELECT d.id, 1 - (de.embedding <#> t.q) AS score
-                FROM doc_embeddings de, docs d, tmp_query t
-                WHERE d.id = de.doc_id
-                ORDER BY de.embedding <-> t.q
-                LIMIT %s
-            """, (k,))
-            
-            return [(row[0], float(row[1])) for row in cur.fetchall()]
+    try:
+        vec = embed(query)
+        
+        with db_pool.connection() as conn:
+            with conn.cursor() as cur:
+                # Check if embeddings are available
+                cur.execute("SELECT COUNT(*) FROM doc_embeddings")
+                cnt = cur.fetchone()[0]
+                
+                if cnt == 0:
+                    return []
+                
+                # Create temp table for query vector
+                try:
+                    cur.execute("CREATE TEMP TABLE tmp_query(q vector(1536));")
+                    cur.execute("INSERT INTO tmp_query VALUES (%s)", (vec,))
+                except Exception as e:
+                    service.log_error(e, "pgvector extension not available")
+                    return []
+                
+                # Get vector similarity scores
+                cur.execute("""
+                    SELECT d.id, 
+                           CASE 
+                               WHEN de.embedding <#> t.q IS NOT NULL 
+                               THEN 1 - (de.embedding <#> t.q)
+                               ELSE 0.0
+                           END AS score
+                    FROM doc_embeddings de, docs d, tmp_query t
+                    WHERE d.id = de.doc_id
+                    ORDER BY de.embedding <-> t.q
+                    LIMIT %s
+                """, (k,))
+                
+                results = []
+                for row in cur.fetchall():
+                    doc_id = row[0]
+                    score = row[1] if row[1] is not None else 0.0
+                    try:
+                        results.append((doc_id, float(score)))
+                    except (ValueError, TypeError):
+                        results.append((doc_id, 0.0))
+                
+                return results
+                
+    except Exception as e:
+        service.log_error(e, "vector_scores")
+        return []
 
 def hybrid_search(query: str, k: int = 5) -> List[Dict[str, Any]]:
     """Perform hybrid search combining BM25 and vector search."""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get all documents for BM25
             cur.execute("SELECT id, title, content, meta FROM docs")
@@ -196,7 +237,7 @@ def search(q: Query, request: Request):
             results = hybrid_search(q.q, q.k)
             
             # Determine search mode based on available data
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT COUNT(*) FROM doc_embeddings")
                     embeddings_count = cur.fetchone()[0]

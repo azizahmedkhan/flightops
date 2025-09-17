@@ -1,14 +1,20 @@
 import sys
 import os
+import json
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+
+import httpx
+import psycopg
+from fastapi import HTTPException, Request
+from pydantic import BaseModel
+from psycopg_pool import ConnectionPool
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
-from fastapi import HTTPException, Request
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import psycopg, httpx, json
-from datetime import datetime, timedelta
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -23,6 +29,10 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
+
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
 
 class CrewOptimizationRequest(BaseModel):
     flight_no: str
@@ -48,6 +58,23 @@ class CrewMember(BaseModel):
     availability_status: str
     last_flight: Optional[str] = None
 
+@asynccontextmanager
+async def lifespan(app):
+    global db_pool
+    log_startup("crew-svc")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
+    yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
+
+# Set lifespan for the app
+app.router.lifespan_context = lifespan
+
 class CrewSwap(BaseModel):
     original_crew: CrewMember
     replacement_crew: CrewMember
@@ -70,7 +97,7 @@ def get_crew_qualifications(crew_id: str) -> List[str]:
 
 def calculate_duty_hours(crew_id: str, date: str) -> Dict[str, Any]:
     """Calculate current duty hours and rest requirements"""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get crew's flights for the day
             cur.execute("""
@@ -144,7 +171,7 @@ def check_crew_legality(crew_id: str, flight_no: str, date: str) -> Dict[str, An
 def find_replacement_crew(unavailable_crew_id: str, flight_no: str, date: str, 
                          required_role: str, required_qualifications: List[str]) -> List[CrewMember]:
     """Find suitable replacement crew members"""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get all crew members with the required role
             cur.execute("""
@@ -253,7 +280,7 @@ def optimize_crew_assignments(req: CrewOptimizationRequest, request: Request):
     with LATENCY.labels("crew-svc", "/optimize_crew", "POST").time():
         try:
             # Get current crew for the flight
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         SELECT cr.crew_id, cr.crew_role, cd.crew_name, cd.max_duty_hours
@@ -330,7 +357,7 @@ def suggest_crew_swap(req: CrewSwapRequest, request: Request):
     with LATENCY.labels("crew-svc", "/suggest_crew_swap", "POST").time():
         try:
             # Get unavailable crew details
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         SELECT cr.crew_role, cd.crew_name, cd.max_duty_hours
@@ -430,7 +457,7 @@ def get_crew_availability(date: str, role: Optional[str] = None, request: Reques
     """Get available crew members for a specific date and role"""
     with LATENCY.labels("crew-svc", "/crew_availability", "GET").time():
         try:
-            with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+            with db_pool.connection() as conn:
                 with conn.cursor() as cur:
                     if role:
                         cur.execute("""

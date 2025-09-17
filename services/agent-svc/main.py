@@ -1,13 +1,19 @@
 import sys
 import os
+import json
+from contextlib import asynccontextmanager
+from typing import List, Dict, Any, Optional
+
+import httpx
+import psycopg
+from fastapi import HTTPException, Request
+from pydantic import BaseModel
+from psycopg_pool import ConnectionPool
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
-from fastapi import HTTPException, Request
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import psycopg, httpx, json
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -25,6 +31,27 @@ COMMS_URL = service.get_env_var("COMMS_URL", "http://localhost:8083")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
 
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
+
+@asynccontextmanager
+async def lifespan(app):
+    global db_pool
+    log_startup("agent-svc")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
+    yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
+
+# Set lifespan for the app
+app.router.lifespan_context = lifespan
+
 class Ask(BaseModel):
     question: str
     flight_no: Optional[str] = None
@@ -38,7 +65,7 @@ def pii_scrub(text: str) -> str:
     return text
 
 def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
-    with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
@@ -52,7 +79,7 @@ def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
                     "sched_dep":row[3], "sched_arr":row[4], "status":row[5], "tail_number":row[6]}
 
 def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
-    with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get passenger count and connection details
             cur.execute("""
@@ -97,7 +124,7 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
 
 def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Get detailed crew information for a flight."""
-    with psycopg.connect(host=DB_HOST,port=DB_PORT,dbname=DB_NAME,user=DB_USER,password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT cr.crew_id, cr.crew_role, cd.crew_name, cd.duty_start_time, cd.max_duty_hours
@@ -148,7 +175,7 @@ def tool_advanced_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[st
 
 def get_passenger_profiles(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Get passenger profiles and preferences (mock data)"""
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS) as conn:
+    with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT pnr, passenger_name, has_connection, connecting_flight_no

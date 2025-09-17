@@ -1,14 +1,20 @@
 import sys
 import os
+import csv
+import glob
+import json
+from contextlib import asynccontextmanager
+from typing import Dict, List, Tuple, Optional
+
+import psycopg
+from fastapi import Request
+from pydantic import BaseModel
+from psycopg_pool import ConnectionPool
+
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
-from fastapi import Request
-from pydantic import BaseModel
-import json, csv, glob
-import psycopg
 from utils import log_startup
-from typing import Dict, List, Tuple, Optional
 
 # Initialize base service
 service = BaseService("ingest-svc", "1.0.0")
@@ -22,6 +28,10 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
+
+# Create database connection pool
+DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
+db_pool = None
 
 DATA_DIR = "/data"
 
@@ -41,11 +51,29 @@ def embed(text: str) -> List[float]:
     random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
     return [random.random() for _ in range(1536)]
 
+@asynccontextmanager
+async def lifespan(app):
+    global db_pool
+    log_startup("ingest-svc")
+    
+    # Initialize connection pool
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    
+    yield
+    
+    # Close connection pool on shutdown
+    if db_pool:
+        db_pool.close()
+
+# Set lifespan for the app
+app.router.lifespan_context = lifespan
+
 def parse_csv_files() -> Dict[str, int]:
     """Parse CSV files and return counts of loaded records."""
     counts = {}
     
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS, autocommit=True) as conn:
+    with db_pool.connection() as conn:
+        conn.autocommit = True
         with conn.cursor() as cur:
             # Drop existing tables to recreate with new structure
             cur.execute("DROP TABLE IF EXISTS flights CASCADE")
@@ -123,7 +151,8 @@ def parse_markdown_files() -> Tuple[int, bool]:
     doc_count = 0
     embeddings_available = bool(OPENAI_API_KEY)
     
-    with psycopg.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS, autocommit=True) as conn:
+    with db_pool.connection() as conn:
+        conn.autocommit = True
         with conn.cursor() as cur:
             # Enable vector extension
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
