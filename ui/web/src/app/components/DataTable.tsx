@@ -161,23 +161,33 @@ export default function DataTable({
     }
 
     if (column.type === 'vector') {
+      const isArray = Array.isArray(value)
+      const dimensions = isArray ? value.length : 0
+      const hasData = isArray && dimensions > 0
+      
       return (
         <div className="flex items-center space-x-2">
           <span className="text-xs text-gray-500">
-            Vector ({Array.isArray(value) ? value.length : 0} dimensions)
+            Vector ({dimensions} dimensions)
           </span>
-          <button
-            onClick={() => setShowVector(prev => ({ ...prev, [row[primaryKey]]: !prev[row[primaryKey]] }))}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            {showVector[row[primaryKey]] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-          {showVector[row[primaryKey]] && (
+          {hasData && (
+            <button
+              onClick={() => setShowVector(prev => ({ ...prev, [row[primaryKey]]: !prev[row[primaryKey]] }))}
+              className="text-blue-600 hover:text-blue-800"
+              title={showVector[row[primaryKey]] ? "Hide vector" : "Show vector"}
+            >
+              {showVector[row[primaryKey]] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          )}
+          {showVector[row[primaryKey]] && hasData && (
             <div className="max-w-xs overflow-hidden">
-              <code className="text-xs bg-gray-100 p-1 rounded">
-                [{Array.isArray(value) ? value.slice(0, 5).map(v => v.toFixed(4)).join(', ') : '[]'}...]
+              <code className="text-xs bg-gray-100 p-1 rounded block">
+                [{value.slice(0, 5).map(v => typeof v === 'number' ? v.toFixed(4) : String(v)).join(', ')}...]
               </code>
             </div>
+          )}
+          {!hasData && (
+            <span className="text-xs text-gray-400 italic">No embedding data</span>
           )}
         </div>
       )

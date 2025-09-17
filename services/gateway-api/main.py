@@ -673,20 +673,64 @@ async def delete_aircraft_status(tail_number: str, request: Request):
 async def get_policies(request: Request):
     try:
         policies = execute_query("""
-            SELECT d.id, d.title, d.content, d.meta, de.embedding
+            SELECT d.id, d.title, d.content, d.meta, de.embedding, vector_dims(de.embedding) as embedding_dims
             FROM docs d
             LEFT JOIN doc_embeddings de ON d.id = de.doc_id
             ORDER BY d.id
         """)
         
+        # Debug logging
+        service.logger.info(f"Retrieved {len(policies)} policies from database")
+        for i, policy in enumerate(policies):
+            service.logger.info(f"Policy {i}: id={policy.get('id')}, title={policy.get('title')}, embedding_type={type(policy.get('embedding'))}, embedding_value={policy.get('embedding')}")
+        
         # Convert vector embeddings to arrays for JSON serialization
         for policy in policies:
-            if policy.get('embedding') is not None:
-                # Convert pgvector to list if it's not already
-                if hasattr(policy['embedding'], '__iter__') and not isinstance(policy['embedding'], str):
-                    policy['embedding'] = list(policy['embedding'])
-                else:
+            embedding = policy.get('embedding')
+            embedding_dims = policy.get('embedding_dims')
+            
+            # Remove the embedding_dims field as it's not part of the Policy model
+            if 'embedding_dims' in policy:
+                del policy['embedding_dims']
+            
+            if embedding is not None and embedding_dims is not None:
+                try:
+                    # Handle pgvector data - it might be a string representation or a special object
+                    if isinstance(embedding, str):
+                        # If it's a string, try to parse it as a vector representation
+                        # pgvector often returns strings like "[0.1, 0.2, 0.3]" or similar
+                        if embedding.startswith('[') and embedding.endswith(']'):
+                            # Remove brackets and split by comma
+                            vector_str = embedding[1:-1]
+                            if vector_str.strip():
+                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
+                                service.logger.info(f"Parsed string embedding for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
+                            else:
+                                policy['embedding'] = None
+                        else:
+                            policy['embedding'] = None
+                    elif hasattr(embedding, '__iter__') and not isinstance(embedding, str):
+                        # If it's already iterable (list, tuple, etc.)
+                        policy['embedding'] = list(embedding)
+                        service.logger.info(f"Converted iterable embedding for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
+                    else:
+                        # Try to convert to string first, then parse
+                        embedding_str = str(embedding)
+                        if embedding_str.startswith('[') and embedding_str.endswith(']'):
+                            vector_str = embedding_str[1:-1]
+                            if vector_str.strip():
+                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
+                                service.logger.info(f"Converted string representation for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
+                            else:
+                                policy['embedding'] = None
+                        else:
+                            service.logger.info(f"Unknown embedding format for policy {policy.get('id')}: {type(embedding)} - {embedding} (expected dims: {embedding_dims})")
+                            policy['embedding'] = None
+                except Exception as e:
+                    service.logger.error(f"Error converting embedding for policy {policy.get('id')}: {e} (expected dims: {embedding_dims})")
                     policy['embedding'] = None
+            else:
+                service.logger.info(f"No embedding found for policy {policy.get('id')} (dims: {embedding_dims})")
         
         service.log_request(request, {"status": "success", "count": len(policies)})
         return policies
@@ -770,7 +814,7 @@ async def search_policies(query: dict, request: Request):
         
         # Simple text search for now - could be enhanced with vector search
         policies = execute_query("""
-            SELECT d.id, d.title, d.content, d.meta, de.embedding
+            SELECT d.id, d.title, d.content, d.meta, de.embedding, vector_dims(de.embedding) as embedding_dims
             FROM docs d
             LEFT JOIN doc_embeddings de ON d.id = de.doc_id
             WHERE d.title ILIKE %s OR d.content ILIKE %s
@@ -779,11 +823,39 @@ async def search_policies(query: dict, request: Request):
         
         # Convert vector embeddings to arrays for JSON serialization
         for policy in policies:
-            if policy.get('embedding') is not None:
-                # Convert pgvector to list if it's not already
-                if hasattr(policy['embedding'], '__iter__') and not isinstance(policy['embedding'], str):
-                    policy['embedding'] = list(policy['embedding'])
-                else:
+            embedding = policy.get('embedding')
+            embedding_dims = policy.get('embedding_dims')
+            
+            # Remove the embedding_dims field as it's not part of the Policy model
+            if 'embedding_dims' in policy:
+                del policy['embedding_dims']
+            
+            if embedding is not None and embedding_dims is not None:
+                try:
+                    # Handle pgvector data - it might be a string representation or a special object
+                    if isinstance(embedding, str):
+                        # If it's a string, try to parse it as a vector representation
+                        if embedding.startswith('[') and embedding.endswith(']'):
+                            vector_str = embedding[1:-1]
+                            if vector_str.strip():
+                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
+                            else:
+                                policy['embedding'] = None
+                        else:
+                            policy['embedding'] = None
+                    elif hasattr(embedding, '__iter__') and not isinstance(embedding, str):
+                        policy['embedding'] = list(embedding)
+                    else:
+                        embedding_str = str(embedding)
+                        if embedding_str.startswith('[') and embedding_str.endswith(']'):
+                            vector_str = embedding_str[1:-1]
+                            if vector_str.strip():
+                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
+                            else:
+                                policy['embedding'] = None
+                        else:
+                            policy['embedding'] = None
+                except Exception as e:
                     policy['embedding'] = None
         
         service.log_request(request, {"status": "success", "count": len(policies)})
