@@ -28,7 +28,7 @@ Optimize by:
 4. Adding personalized recommendations
 5. Ranking by overall value (CX score vs cost)
 
-Return optimized options as JSON array, maintaining the same structure.
+IMPORTANT: Return ONLY a valid JSON array with the optimized options. Do not include any explanations, markdown formatting, or additional text. The response must be parseable JSON.
 """
 
     # Communications Service Prompts

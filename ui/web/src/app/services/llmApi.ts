@@ -25,7 +25,7 @@ export class LLMApi {
   /**
    * Fetch LLM messages from the backend
    */
-  static async getMessages(limit: number = 50, service?: string): Promise<LLMMessagesResponse> {
+  async getMessages(limit: number = 50, service?: string): Promise<LLMMessagesResponse> {
     const params = new URLSearchParams()
     params.append('limit', limit.toString())
     if (service) {
@@ -44,7 +44,7 @@ export class LLMApi {
   /**
    * Track a new LLM message
    */
-  static async trackMessage(message: LLMMessage): Promise<void> {
+  async trackMessage(message: LLMMessage): Promise<void> {
     const response = await fetch(`${GATEWAY_URL}/llm/track`, {
       method: 'POST',
       headers: {
@@ -61,7 +61,7 @@ export class LLMApi {
   /**
    * Clear all LLM messages
    */
-  static async clearMessages(): Promise<void> {
+  async clearMessages(): Promise<void> {
     const response = await fetch(`${GATEWAY_URL}/llm/messages`, {
       method: 'DELETE',
     })
@@ -74,7 +74,7 @@ export class LLMApi {
   /**
    * Send a custom event to notify components of new messages
    */
-  static notifyNewMessage(message: LLMMessage): void {
+  notifyNewMessage(message: LLMMessage): void {
     const event = new CustomEvent('llm-message', { detail: message })
     window.dispatchEvent(event)
   }

@@ -25,6 +25,7 @@ export default function LLMMessageDisplay({ className = '' }: LLMMessageDisplayP
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [llmApi] = useState(() => new LLMApi())
 
   // Load messages from API on mount
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function LLMMessageDisplay({ className = '' }: LLMMessageDisplayP
     setLoading(true)
     try {
       console.log('Loading LLM messages...')
-      const response = await LLMApi.getMessages(50)
+      const response = await llmApi.getMessages(50)
       console.log('LLM messages response:', response)
       setMessages(response.messages)
     } catch (error) {
@@ -75,7 +76,7 @@ export default function LLMMessageDisplay({ className = '' }: LLMMessageDisplayP
 
   const clearMessages = async () => {
     try {
-      await LLMApi.clearMessages()
+      await llmApi.clearMessages()
       setMessages([])
       toast.success('Messages cleared')
     } catch (error) {

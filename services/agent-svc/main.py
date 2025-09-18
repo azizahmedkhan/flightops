@@ -15,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 from base_service import BaseService
 from prompt_manager import PromptManager
 from llm_tracker import LLMTracker
+from llm_client import create_llm_client
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -32,6 +33,9 @@ COMMS_URL = service.get_env_var("COMMS_URL")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
 CHAT_MODEL = service.get_env_var("CHAT_MODEL")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
+
+# Initialize LLM client
+llm_client = create_llm_client("agent-svc", CHAT_MODEL)
 
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
@@ -329,68 +333,54 @@ def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profile
     import time
     start_time = time.time()
     
-    print(f"DEBUG: optimize_rebooking_with_llm called with OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
-    print(f"DEBUG: OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
-    print(f"DEBUG: OPENAI_API_KEY starts with 'sk-': {OPENAI_API_KEY.startswith('sk-') if OPENAI_API_KEY else False}")
-    print(f"DEBUG: CHAT_MODEL: {CHAT_MODEL}")
-    
     if not OPENAI_API_KEY or not OPENAI_API_KEY.startswith('sk-'):
         print(f"DEBUG: No valid OpenAI API key, falling back to rule-based")
         return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
         prompt = PromptManager.get_rebooking_optimization_prompt(flight, impact, passenger_profiles, options)
-        print(f"DEBUG: Generated prompt length: {len(prompt)}")
-        print(f"DEBUG: Prompt preview: {prompt[:200]}...")
-        print(f"DEBUG: Sending prompt to LLM model {CHAT_MODEL}")
         
-        response = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        print(f"DEBUG: LLM response received")
-        
-        content = response.choices[0].message.content
-        print(f"DEBUG: LLM response length: {len(content)}")
-        print(f"DEBUG: LLM response preview: {content[:200]}...")
-        duration_ms = (time.time() - start_time) * 1000
-        
-        # Track the LLM message
-        llm_message = LLMTracker.track_llm_call(
-            service_name="agent-svc",
+        # Use simple_completion to get the LLM message for tracking
+        result = llm_client.simple_completion(
             prompt=prompt,
-            response=content,
-            model=CHAT_MODEL,
-            tokens_used=response.usage.total_tokens if response.usage else None,
-            duration_ms=duration_ms,
+            temperature=0.3,
+            function_name="optimize_rebooking_with_llm",
             metadata={
-                "function": "optimize_rebooking_with_llm",
                 "flight_no": flight.get("flight_no"),
                 "passenger_count": len(passenger_profiles)
-            }
+            },
+            include_tracking=True
         )
         
+        # Extract content and LLM message
+        if isinstance(result, dict):
+            content = result.get("content", "")
+            llm_message = result.get("llm_message")
+        else:
+            content = str(result)
+            llm_message = None
+        
+        # Parse JSON from content
         try:
             optimized = json.loads(content)
-            # Ensure we have the required fields
-            for option in optimized:
-                if "cx_score" not in option:
-                    option["cx_score"] = 0.8
-                if "cost_estimate" not in option:
-                    option["cost_estimate"] = 100
-                if "success_probability" not in option:
-                    option["success_probability"] = 0.8
-            
-            # Add LLM message to the result
-            optimized.append({"llm_message": llm_message})
-            return optimized
         except json.JSONDecodeError:
-            print(f"DEBUG: JSON decode error, falling back to rule-based")
+            print(f"DEBUG: Failed to parse JSON, using fallback")
             return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+        
+        # Ensure we have the required fields
+        for option in optimized:
+            if "cx_score" not in option:
+                option["cx_score"] = 0.8
+            if "cost_estimate" not in option:
+                option["cost_estimate"] = 100
+            if "success_probability" not in option:
+                option["success_probability"] = 0.8
+        
+        # Add LLM message to the first option for tracking
+        if llm_message and len(optimized) > 0:
+            optimized[0]["llm_message"] = llm_message
+        
+        return optimized
             
     except Exception as e:
         print(f"DEBUG: LLM call failed with error: {e}")
@@ -533,40 +523,24 @@ def test_llm(request: Request):
         print(f"DEBUG: test_llm endpoint called with prompt: {prompt[:100]}...")
         
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            
-            response = client.chat.completions.create(
-                model=CHAT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.8,
-                max_tokens=200
-            )
-            
-            content = response.choices[0].message.content
-            duration_ms = (time.time() - start_time) * 1000
-            
-            # Track the LLM message
-            llm_message = LLMTracker.track_llm_call(
-                service_name="agent-svc",
+            result = llm_client.simple_completion(
                 prompt=prompt,
-                response=content,
-                model=CHAT_MODEL,
-                tokens_used=response.usage.total_tokens if response.usage else None,
-                duration_ms=duration_ms,
+                temperature=0.8,
+                max_tokens=200,
+                function_name="test_llm",
                 metadata={
-                    "function": "test_llm",
                     "endpoint": "test_llm"
-                }
+                },
+                include_tracking=True
             )
             
-            result = {
-                "answer": content,
-                "llm_message": llm_message
+            response_data = {
+                "answer": result["content"],
+                "llm_message": result["llm_message"]
             }
             
             service.log_request(request, {"status": "success"})
-            return result
+            return response_data
             
         except Exception as e:
             print(f"DEBUG: LLM call failed with error: {e}")

@@ -25,6 +25,7 @@ export default function RootLayout({
     { href: '/customer-chat', label: 'Customer Chat' },
     { href: '/comms', label: 'Communications' },
     { href: '/query', label: 'Agent Query' },
+    { href: '/llm-audit', label: 'LLM Audit' },
   ]
 
   return (

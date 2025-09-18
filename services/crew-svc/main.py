@@ -15,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
+from llm_client import create_llm_client
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -29,6 +30,9 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
+
+# Initialize LLM client
+llm_client = create_llm_client("crew-svc", CHAT_MODEL)
 
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
@@ -221,22 +225,20 @@ def generate_llm_crew_analysis(crew_data: Dict[str, Any], disruption_context: st
         return generate_rule_based_crew_analysis(crew_data, disruption_context)
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
         prompt = PromptManager.get_crew_analysis_prompt(crew_data, disruption_context)
         
-        response = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+        result = llm_client.json_completion(
+            prompt=prompt,
+            temperature=0.3,
+            function_name="generate_llm_crew_analysis",
+            metadata={
+                "disruption_context": disruption_context,
+                "crew_count": len(crew_data.get("crew", []))
+            },
+            fallback_value=generate_rule_based_crew_analysis(crew_data, disruption_context)
         )
         
-        content = response.choices[0].message.content
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return generate_rule_based_crew_analysis(crew_data, disruption_context)
+        return result
             
     except Exception as e:
         service.log_error(e, "LLM crew analysis")

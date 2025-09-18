@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 from base_service import BaseService
 from prompt_manager import PromptManager
 from llm_tracker import LLMTracker
+from llm_client import create_llm_client
 from utils import REQUEST_COUNT, LATENCY, log_startup
 
 # Initialize base service
@@ -21,6 +22,9 @@ app = service.get_app()
 # Get environment variables using the base service
 CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
+
+# Initialize LLM client
+llm_client = create_llm_client("comms-svc", CHAT_MODEL)
 
 class DraftReq(BaseModel):
     context: Dict[str, Any]
@@ -93,29 +97,12 @@ def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
     start_time = time.time()
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
         prompt = PromptManager.get_tone_rewrite_prompt(template_text, tone)
         
-        resp = client.chat.completions.create(
-            model=CHAT_MODEL, 
-            messages=[{"role":"user","content":prompt}]
-        )
-        
-        content = resp.choices[0].message.content
-        duration_ms = (time.time() - start_time) * 1000
-        
-        # Track the LLM message
-        llm_message = LLMTracker.track_llm_call(
-            service_name="comms-svc",
+        content = llm_client.simple_completion(
             prompt=prompt,
-            response=content,
-            model=CHAT_MODEL,
-            tokens_used=resp.usage.total_tokens if resp.usage else None,
-            duration_ms=duration_ms,
+            function_name="llm_rewrite_for_tone",
             metadata={
-                "function": "llm_rewrite_for_tone",
                 "tone": tone
             }
         )
@@ -134,33 +121,16 @@ def translate_communication(text: str, target_language: str, context: Dict[str, 
     start_time = time.time()
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
         # Get cultural context for the language
         cultural_context = get_cultural_context(target_language)
         
         prompt = PromptManager.get_translation_prompt(text, target_language, context, cultural_context)
         
-        resp = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        
-        content = resp.choices[0].message.content
-        duration_ms = (time.time() - start_time) * 1000
-        
-        # Track the LLM message
-        llm_message = LLMTracker.track_llm_call(
-            service_name="comms-svc",
+        content = llm_client.simple_completion(
             prompt=prompt,
-            response=content,
-            model=CHAT_MODEL,
-            tokens_used=resp.usage.total_tokens if resp.usage else None,
-            duration_ms=duration_ms,
+            temperature=0.3,
+            function_name="translate_communication",
             metadata={
-                "function": "translate_communication",
                 "target_language": target_language,
                 "flight_no": context.get("flight_no")
             }
@@ -337,45 +307,24 @@ def analyze_sentiment_with_llm(text: str, context: Optional[Dict[str, Any]] = No
     start_time = time.time()
     
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        
         context_str = ""
         if context:
             context_str = f"Context: Flight {context.get('flight_no', 'Unknown')}, Issue: {context.get('issue', 'Unknown')}"
         
         prompt = PromptManager.get_sentiment_analysis_prompt(text, context)
         
-        response = client.chat.completions.create(
-            model=CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        
-        content = response.choices[0].message.content
-        duration_ms = (time.time() - start_time) * 1000
-        
-        # Track the LLM message
-        llm_message = LLMTracker.track_llm_call(
-            service_name="comms-svc",
+        result = llm_client.json_completion(
             prompt=prompt,
-            response=content,
-            model=CHAT_MODEL,
-            tokens_used=response.usage.total_tokens if response.usage else None,
-            duration_ms=duration_ms,
+            temperature=0.3,
+            function_name="analyze_sentiment_with_llm",
             metadata={
-                "function": "analyze_sentiment_with_llm",
                 "flight_no": context.get("flight_no") if context else None,
                 "text_length": len(text)
-            }
+            },
+            fallback_value=analyze_sentiment_rule_based(text)
         )
         
-        try:
-            result = json.loads(content)
-            result["llm_message"] = llm_message
-            return result
-        except json.JSONDecodeError:
-            return analyze_sentiment_rule_based(text)
+        return result
             
     except Exception as e:
         service.log_error(e, "LLM sentiment analysis")
