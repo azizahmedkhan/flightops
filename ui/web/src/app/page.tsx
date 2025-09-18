@@ -9,6 +9,7 @@ import {
   Zap,
   Users
 } from 'lucide-react'
+import LLMTestComponent from './components/LLMTestComponent'
 
 export default function HomePage() {
   const features = [
@@ -168,6 +169,11 @@ export default function HomePage() {
               Seed Demo Data
             </Link>
           </div>
+        </div>
+
+        {/* LLM Test Component */}
+        <div className="mt-8">
+          <LLMTestComponent />
         </div>
       </main>
     </div>

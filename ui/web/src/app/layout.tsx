@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
+import LLMMessageDisplay from './components/LLMMessageDisplay'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -61,6 +62,11 @@ export default function RootLayout({
           <main className="flex-1 px-0 pb-10 pt-6 sm:pt-8">
             {children}
           </main>
+
+          {/* LLM Message Display - Fixed position */}
+          <div className="fixed bottom-4 right-4 z-30 w-96 max-w-[calc(100vw-2rem)]">
+            <LLMMessageDisplay />
+          </div>
 
           <Toaster position="top-right" />
         </div>

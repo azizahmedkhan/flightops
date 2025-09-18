@@ -15,6 +15,7 @@ from psycopg_pool import ConnectionPool
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
+from llm_tracker import LLMTracker
 
 # Initialize base service
 service = BaseService("gateway-api", "1.0.0")
@@ -43,6 +44,9 @@ EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-sma
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
 db_pool = None
+
+# Global LLM message store (in production, use Redis or database)
+llm_messages = []
 
 def embed(text: str) -> List[float]:
     """Generate embeddings using OpenAI API."""
@@ -275,11 +279,39 @@ async def ask(payload: dict, request: Request):
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{AGENT_URL}/ask", json=payload, timeout=60.0)
             result = r.json()
+            
+            # Track LLM message if present in response
+            if 'llm_message' in result:
+                llm_messages.append(result['llm_message'])
+                # Keep only last 1000 messages
+                if len(llm_messages) > 1000:
+                    llm_messages[:] = llm_messages[-1000:]
+            
             service.log_request(request, {"status": "success"})
             return result
     except Exception as e:
         service.log_error(e, "ask endpoint")
         raise
+
+@app.post("/test_llm")
+async def test_llm(request: Request):
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{AGENT_URL}/test_llm", timeout=60.0)
+            result = r.json()
+            
+            # Track LLM message if present in response
+            if 'llm_message' in result:
+                llm_messages.append(result['llm_message'])
+                # Keep only last 1000 messages
+                if len(llm_messages) > 1000:
+                    llm_messages[:] = llm_messages[-1000:]
+            
+            service.log_request(request, {"status": "success"})
+            return result
+    except Exception as e:
+        service.log_error(e, "test_llm endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/draft_comms")
 async def draft_comms(payload: dict, request: Request):
@@ -287,6 +319,14 @@ async def draft_comms(payload: dict, request: Request):
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{AGENT_URL}/draft_comms", json=payload, timeout=60.0)
             result = r.json()
+            
+            # Track LLM message if present in response
+            if 'llm_message' in result:
+                llm_messages.append(result['llm_message'])
+                # Keep only last 1000 messages
+                if len(llm_messages) > 1000:
+                    llm_messages[:] = llm_messages[-1000:]
+            
             service.log_request(request, {"status": "success"})
             return result
     except Exception as e:
@@ -1164,4 +1204,48 @@ async def analyze_communication_sentiment(request: Request):
             return response.json()
     except Exception as e:
         service.log_error(e, "analyze_communication_sentiment endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# LLM Message Tracking Endpoints
+@app.post("/llm/track")
+async def track_llm_message(request: Request):
+    """Track an LLM message from a service"""
+    try:
+        message_data = await request.json()
+        llm_messages.append(message_data)
+        # Keep only last 1000 messages
+        if len(llm_messages) > 1000:
+            llm_messages[:] = llm_messages[-1000:]
+        return {"status": "success", "message_id": message_data.get("id")}
+    except Exception as e:
+        service.log_error(e, "track_llm_message endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/llm/messages")
+async def get_llm_messages(limit: int = 50, service: Optional[str] = None):
+    """Get recent LLM messages"""
+    try:
+        messages = llm_messages.copy()
+        
+        # Filter by service if specified
+        if service:
+            messages = [msg for msg in messages if msg.get("service") == service]
+        
+        # Sort by timestamp (newest first) and limit
+        messages.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        messages = messages[:limit]
+        
+        return {"messages": messages, "total": len(messages)}
+    except Exception as e:
+        service.log_error(e, "get_llm_messages endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/llm/messages")
+async def clear_llm_messages():
+    """Clear all LLM messages"""
+    try:
+        llm_messages.clear()
+        return {"status": "success", "message": "All LLM messages cleared"}
+    except Exception as e:
+        service.log_error(e, "clear_llm_messages endpoint")
         raise HTTPException(status_code=500, detail=str(e))

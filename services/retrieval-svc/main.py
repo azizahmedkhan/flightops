@@ -22,7 +22,7 @@ from utils import REQUEST_COUNT, LATENCY, log_startup
 service = BaseService("retrieval-svc", "1.0.0")
 
 # Get environment variables using the base service
-DB_HOST = service.get_env_var("DB_HOST", "localhost")
+DB_HOST = service.get_env_var("DB_HOST", "db")
 DB_PORT = service.get_env_int("DB_PORT", 5432)
 DB_NAME = service.get_env_var("DB_NAME", "flightops")
 DB_USER = service.get_env_var("DB_USER", "postgres")

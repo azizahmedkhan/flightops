@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
+from llm_tracker import LLMTracker
 from utils import LATENCY, log_startup
 
 # Initialize base service
@@ -21,15 +22,15 @@ service = BaseService("agent-svc", "1.0.0")
 app = service.get_app()
 
 # Get environment variables using the base service
-DB_HOST = service.get_env_var("DB_HOST", "localhost")
+DB_HOST = service.get_env_var("DB_HOST")
 DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME", "flightops")
-DB_USER = service.get_env_var("DB_USER", "postgres")
-DB_PASS = service.get_env_var("DB_PASS", "postgres")
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://localhost:8081")
-COMMS_URL = service.get_env_var("COMMS_URL", "http://localhost:8083")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
-CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
+DB_NAME = service.get_env_var("DB_NAME")
+DB_USER = service.get_env_var("DB_USER")
+DB_PASS = service.get_env_var("DB_PASS")
+RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL")
+COMMS_URL = service.get_env_var("COMMS_URL")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
+CHAT_MODEL = service.get_env_var("CHAT_MODEL")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", False)
 
 # Create database connection pool
@@ -325,19 +326,54 @@ def get_alternative_hub(origin: str, destination: str) -> str:
 def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profiles: List[Dict[str, Any]], 
                                flight: Dict[str, Any], impact: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Use LLM to optimize rebooking options"""
+    import time
+    start_time = time.time()
+    
+    print(f"DEBUG: optimize_rebooking_with_llm called with OPENAI_API_KEY: {'SET' if OPENAI_API_KEY else 'NOT SET'}")
+    print(f"DEBUG: OPENAI_API_KEY length: {len(OPENAI_API_KEY) if OPENAI_API_KEY else 0}")
+    print(f"DEBUG: OPENAI_API_KEY starts with 'sk-': {OPENAI_API_KEY.startswith('sk-') if OPENAI_API_KEY else False}")
+    print(f"DEBUG: CHAT_MODEL: {CHAT_MODEL}")
+    
+    if not OPENAI_API_KEY or not OPENAI_API_KEY.startswith('sk-'):
+        print(f"DEBUG: No valid OpenAI API key, falling back to rule-based")
+        return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+    
     try:
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
         
         prompt = PromptManager.get_rebooking_optimization_prompt(flight, impact, passenger_profiles, options)
+        print(f"DEBUG: Generated prompt length: {len(prompt)}")
+        print(f"DEBUG: Prompt preview: {prompt[:200]}...")
+        print(f"DEBUG: Sending prompt to LLM model {CHAT_MODEL}")
         
         response = client.chat.completions.create(
             model=CHAT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
+        print(f"DEBUG: LLM response received")
         
         content = response.choices[0].message.content
+        print(f"DEBUG: LLM response length: {len(content)}")
+        print(f"DEBUG: LLM response preview: {content[:200]}...")
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Track the LLM message
+        llm_message = LLMTracker.track_llm_call(
+            service_name="agent-svc",
+            prompt=prompt,
+            response=content,
+            model=CHAT_MODEL,
+            tokens_used=response.usage.total_tokens if response.usage else None,
+            duration_ms=duration_ms,
+            metadata={
+                "function": "optimize_rebooking_with_llm",
+                "flight_no": flight.get("flight_no"),
+                "passenger_count": len(passenger_profiles)
+            }
+        )
+        
         try:
             optimized = json.loads(content)
             # Ensure we have the required fields
@@ -349,17 +385,46 @@ def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profile
                 if "success_probability" not in option:
                     option["success_probability"] = 0.8
             
+            # Add LLM message to the result
+            optimized.append({"llm_message": llm_message})
             return optimized
         except json.JSONDecodeError:
+            print(f"DEBUG: JSON decode error, falling back to rule-based")
             return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
             
     except Exception as e:
+        print(f"DEBUG: LLM call failed with error: {e}")
         service.log_error(e, "LLM rebooking optimization")
+        
+        # Create a test LLM message to show in UI even when API fails
+        import time
+        test_message = {
+            "id": "test-message-" + str(int(time.time())),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            "service": "agent-svc",
+            "prompt": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+            "response": f"LLM call failed: {str(e)[:200]}...",
+            "model": CHAT_MODEL,
+            "tokens_used": 0,
+            "duration_ms": (time.time() - start_time) * 1000,
+            "metadata": {
+                "function": "optimize_rebooking_with_llm",
+                "error": True,
+                "error_type": type(e).__name__
+            }
+        }
+        
+        # Add the test message to the first option
+        if options:
+            options[0]["llm_message"] = test_message
+        
         return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
 
 def optimize_rebooking_rule_based(options: List[Dict[str, Any]], passenger_profiles: List[Dict[str, Any]], 
                                  flight: Dict[str, Any], impact: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Rule-based rebooking optimization fallback"""
+    print(f"DEBUG: Using rule-based rebooking optimization (no LLM call)")
+    
     vip_count = len([p for p in passenger_profiles if p["loyalty_tier"] in ["Gold", "Platinum"]])
     connecting_count = len([p for p in passenger_profiles if p["has_connection"]])
     
@@ -408,6 +473,7 @@ def ensure_grounded(citations: List[str]) -> bool:
 def ask(body: Ask, request: Request):
     with LATENCY.labels("agent-svc","/ask","POST").time():
         try:
+            print(f"DEBUG: /ask endpoint called with question: {body.question}")
             q = pii_scrub(body.question)
             fno = body.flight_no
             date = body.date
@@ -415,7 +481,9 @@ def ask(body: Ask, request: Request):
             flight = tool_flight_lookup(fno, date)
             impact = tool_impact_assessor(fno, date)
             crew_details = tool_crew_details(fno, date)
+            print(f"DEBUG: About to call tool_advanced_rebooking_optimizer")
             options = tool_advanced_rebooking_optimizer(fno, date)
+            print(f"DEBUG: tool_advanced_rebooking_optimizer returned {len(options)} options")
             policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
 
             if not ensure_grounded(policy.get("citations", [])):
@@ -437,11 +505,101 @@ def ask(body: Ask, request: Request):
                     },
                     "tools_payload": payload}
             
+            # Extract LLM message from options if present
+            print(f"DEBUG: Checking {len(options)} options for LLM message")
+            for i, option in enumerate(options):
+                if isinstance(option, dict) and "llm_message" in option:
+                    print(f"DEBUG: Found LLM message in option {i}")
+                    result["llm_message"] = option["llm_message"]
+                    break
+            print(f"DEBUG: Final result has llm_message: {'llm_message' in result}")
+            
             service.log_request(request, {"status": "success"})
             return result
         except Exception as e:
             service.log_error(e, "ask endpoint")
             raise
+
+@app.post("/test_llm")
+def test_llm(request: Request):
+    """Test endpoint for general LLM calls using prompt manager."""
+    try:
+        import time
+        start_time = time.time()
+        
+        # Get the test prompt from prompt manager
+        prompt = PromptManager.get_test_joke_fact_prompt()
+        
+        print(f"DEBUG: test_llm endpoint called with prompt: {prompt[:100]}...")
+        
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            response = client.chat.completions.create(
+                model=CHAT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.8,
+                max_tokens=200
+            )
+            
+            content = response.choices[0].message.content
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Track the LLM message
+            llm_message = LLMTracker.track_llm_call(
+                service_name="agent-svc",
+                prompt=prompt,
+                response=content,
+                model=CHAT_MODEL,
+                tokens_used=response.usage.total_tokens if response.usage else None,
+                duration_ms=duration_ms,
+                metadata={
+                    "function": "test_llm",
+                    "endpoint": "test_llm"
+                }
+            )
+            
+            result = {
+                "answer": content,
+                "llm_message": llm_message
+            }
+            
+            service.log_request(request, {"status": "success"})
+            return result
+            
+        except Exception as e:
+            print(f"DEBUG: LLM call failed with error: {e}")
+            service.log_error(e, "test_llm LLM call")
+            
+            # Create a test LLM message to show in UI even when API fails
+            test_message = {
+                "id": "test-message-" + str(int(time.time())),
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                "service": "agent-svc",
+                "prompt": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+                "response": f"LLM call failed: {str(e)[:200]}...",
+                "model": CHAT_MODEL,
+                "tokens_used": 0,
+                "duration_ms": (time.time() - start_time) * 1000,
+                "metadata": {
+                    "function": "test_llm",
+                    "error": True,
+                    "error_type": type(e).__name__
+                }
+            }
+            
+            result = {
+                "answer": f"LLM call failed: {str(e)}",
+                "llm_message": test_message
+            }
+            
+            service.log_request(request, {"status": "error"})
+            return result
+            
+    except Exception as e:
+        service.log_error(e, "test_llm endpoint")
+        raise
 
 @app.post("/draft_comms")
 def draft_comms(body: Ask, request: Request):

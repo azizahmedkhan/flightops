@@ -1,13 +1,14 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    
     environment:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASS:-postgres}
       - POSTGRES_DB=${DB_NAME:-flightops}
     ports: ["5432:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flightops"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -22,14 +23,15 @@ services:
     build:
       context: ..
       dockerfile: services/retrieval-svc/Dockerfile
+    
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-flightops}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASS=${DB_PASS:-postgres}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +41,7 @@ services:
     build:
       context: ..
       dockerfile: services/comms-svc/Dockerfile
+    
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
@@ -48,6 +51,7 @@ services:
     build:
       context: ..
       dockerfile: services/agent-svc/Dockerfile
+    
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -56,6 +60,8 @@ services:
       - DB_PASS=${DB_PASS:-postgres}
       - RETRIEVAL_URL=http://retrieval-svc:8081
       - COMMS_URL=http://comms-svc:8083
+      - OPENAI_API_KEY=
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS:-false}
     depends_on:
       retrieval-svc:
@@ -68,6 +74,7 @@ services:
     build:
       context: ..
       dockerfile: services/ingest-svc/Dockerfile
+    
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -85,6 +92,7 @@ services:
     build:
       context: ..
       dockerfile: services/customer-chat-svc/Dockerfile
+    
     environment:
       - COMMS_URL=http://comms-svc:8083
       - AGENT_URL=http://agent-svc:8082
@@ -102,6 +110,7 @@ services:
     build:
       context: ..
       dockerfile: services/predictive-svc/Dockerfile
+    
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -119,6 +128,7 @@ services:
     build:
       context: ..
       dockerfile: services/crew-svc/Dockerfile
+    
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -136,6 +146,7 @@ services:
     build:
       context: ..
       dockerfile: services/gateway-api/Dockerfile
+    
     environment:
       - AGENT_URL=http://agent-svc:8082
       - RETRIEVAL_URL=http://retrieval-svc:8081
@@ -172,6 +183,7 @@ services:
     build:
       context: ..
       dockerfile: ui/web/Dockerfile
+    
     environment:
       - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8080
     depends_on:

@@ -11,6 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from prompt_manager import PromptManager
+from llm_tracker import LLMTracker
 from utils import REQUEST_COUNT, LATENCY, log_startup
 
 # Initialize base service
@@ -88,6 +89,9 @@ def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
     if not OPENAI_API_KEY:
         return template_text
     
+    import time
+    start_time = time.time()
+    
     try:
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -98,7 +102,25 @@ def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
             model=CHAT_MODEL, 
             messages=[{"role":"user","content":prompt}]
         )
-        return resp.choices[0].message.content
+        
+        content = resp.choices[0].message.content
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Track the LLM message
+        llm_message = LLMTracker.track_llm_call(
+            service_name="comms-svc",
+            prompt=prompt,
+            response=content,
+            model=CHAT_MODEL,
+            tokens_used=resp.usage.total_tokens if resp.usage else None,
+            duration_ms=duration_ms,
+            metadata={
+                "function": "llm_rewrite_for_tone",
+                "tone": tone
+            }
+        )
+        
+        return content
     except Exception as e:
         service.log_error(e, "llm_rewrite_for_tone")
         return template_text
@@ -107,6 +129,9 @@ def translate_communication(text: str, target_language: str, context: Dict[str, 
     """Translate communication to target language with cultural adaptation"""
     if not OPENAI_API_KEY:
         return text  # Fallback to original text
+    
+    import time
+    start_time = time.time()
     
     try:
         from openai import OpenAI
@@ -122,7 +147,26 @@ def translate_communication(text: str, target_language: str, context: Dict[str, 
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
         )
-        return resp.choices[0].message.content
+        
+        content = resp.choices[0].message.content
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Track the LLM message
+        llm_message = LLMTracker.track_llm_call(
+            service_name="comms-svc",
+            prompt=prompt,
+            response=content,
+            model=CHAT_MODEL,
+            tokens_used=resp.usage.total_tokens if resp.usage else None,
+            duration_ms=duration_ms,
+            metadata={
+                "function": "translate_communication",
+                "target_language": target_language,
+                "flight_no": context.get("flight_no")
+            }
+        )
+        
+        return content
     except Exception as e:
         service.log_error(e, "translate_communication")
         return text
@@ -289,6 +333,9 @@ def analyze_sentiment(req: SentimentAnalysisReq, request: Request):
 
 def analyze_sentiment_with_llm(text: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Use LLM to analyze sentiment of customer communication"""
+    import time
+    start_time = time.time()
+    
     try:
         from openai import OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -306,8 +353,27 @@ def analyze_sentiment_with_llm(text: str, context: Optional[Dict[str, Any]] = No
         )
         
         content = response.choices[0].message.content
+        duration_ms = (time.time() - start_time) * 1000
+        
+        # Track the LLM message
+        llm_message = LLMTracker.track_llm_call(
+            service_name="comms-svc",
+            prompt=prompt,
+            response=content,
+            model=CHAT_MODEL,
+            tokens_used=response.usage.total_tokens if response.usage else None,
+            duration_ms=duration_ms,
+            metadata={
+                "function": "analyze_sentiment_with_llm",
+                "flight_no": context.get("flight_no") if context else None,
+                "text_length": len(text)
+            }
+        )
+        
         try:
-            return json.loads(content)
+            result = json.loads(content)
+            result["llm_message"] = llm_message
+            return result
         except json.JSONDecodeError:
             return analyze_sentiment_rule_based(text)
             

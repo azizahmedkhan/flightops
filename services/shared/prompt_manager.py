@@ -116,6 +116,20 @@ Provide:
 Format as JSON.
 """
 
+    # Test Prompts
+    TEST_JOKE_FACT = """
+Give me a quick and funny time-of-day joke or quirky fact that's different each time.
+
+Make it:
+- Light-hearted and entertaining
+- Related to the current time of day if possible
+- Different from previous responses
+- Brief (1-2 sentences)
+- Appropriate for a professional airline environment
+
+Just provide the joke or fact directly, no additional formatting.
+"""
+
     @classmethod
     def get_prompt(cls, prompt_name: str, **kwargs) -> str:
         """
@@ -217,6 +231,11 @@ Format as JSON.
         )
 
     @classmethod
+    def get_test_joke_fact_prompt(cls) -> str:
+        """Get test joke/fact prompt."""
+        return cls.get_prompt('TEST_JOKE_FACT')
+
+    @classmethod
     def list_prompts(cls) -> Dict[str, str]:
         """List all available prompts with their descriptions."""
         return {
@@ -225,7 +244,8 @@ Format as JSON.
             'TRANSLATION': 'Translate communications with cultural adaptation',
             'SENTIMENT_ANALYSIS': 'Analyze customer communication sentiment',
             'DISRUPTION_PREDICTION': 'Predict potential flight disruptions',
-            'CREW_ANALYSIS': 'Analyze crew situations during disruptions'
+            'CREW_ANALYSIS': 'Analyze crew situations during disruptions',
+            'TEST_JOKE_FACT': 'Generate time-of-day jokes or quirky facts for testing'
         }
 
     @classmethod
@@ -267,5 +287,11 @@ Format as JSON.
                 'temperature': 0.3,
                 'response_format': 'JSON',
                 'description': 'Analyze crew situations during disruptions'
+            },
+            'TEST_JOKE_FACT': {
+                'service': 'agent-svc',
+                'temperature': 0.8,
+                'response_format': 'Plain Text',
+                'description': 'Generate time-of-day jokes or quirky facts for testing'
             }
         }
