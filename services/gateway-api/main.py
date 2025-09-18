@@ -45,20 +45,15 @@ DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER}
 db_pool = None
 
 def embed(text: str) -> List[float]:
-    """Generate embeddings if API key is available, otherwise return deterministic fake vectors."""
-    if OPENAI_API_KEY:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
-            return resp.data[0].embedding
-        except Exception as e:
-            service.log_error(e, "embedding generation")
-            # Fall through to fake vectors
-    # fallback: deterministic fake vector
-    import random, hashlib
-    random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
-    return [random.random() for _ in range(1536)]
+    """Generate embeddings using OpenAI API."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
+        return resp.data[0].embedding
+    except Exception as e:
+        service.log_error(e, "embedding generation")
+        raise e
 
 # Pydantic models for data operations
 class Flight(BaseModel):
@@ -1096,6 +1091,56 @@ async def get_crew_availability(date: str, role: Optional[str] = None, request: 
             return response.json()
     except Exception as e:
         service.log_error(e, "get_crew_availability endpoint")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Flight Number Autocomplete Endpoint
+@app.get("/flights/autocomplete")
+async def get_flight_autocomplete(q: str = "", limit: int = 10, request: Request = None):
+    """Get flight numbers for autocomplete suggestions"""
+    try:
+        if not q or len(q) < 1:
+            # Return recent flights if no query
+            flights = execute_query("""
+                SELECT DISTINCT flight_no, flight_date, origin, destination, status
+                FROM flights 
+                ORDER BY flight_date DESC, flight_no 
+                LIMIT %s
+            """, (limit,))
+        else:
+            # Search for flights matching the query
+            flights = execute_query("""
+                SELECT DISTINCT 
+                    flight_no, 
+                    flight_date, 
+                    origin, 
+                    destination, 
+                    status,
+                    CASE 
+                        WHEN flight_no ILIKE %s THEN 1
+                        WHEN flight_no ILIKE %s THEN 2
+                        ELSE 3
+                    END as priority
+                FROM flights 
+                WHERE flight_no ILIKE %s
+                ORDER BY priority, flight_date DESC, flight_no
+                LIMIT %s
+            """, (f"{q}%", f"%{q}%", f"%{q}%", limit))
+        
+        # Format the response
+        suggestions = []
+        for flight in flights:
+            suggestions.append({
+                "flight_no": flight["flight_no"],
+                "flight_date": flight["flight_date"],
+                "route": f"{flight['origin']} → {flight['destination']}",
+                "status": flight["status"],
+                "display": f"{flight['flight_no']} ({flight['origin']} → {flight['destination']}) - {flight['status']}"
+            })
+        
+        service.log_request(request, {"status": "success", "count": len(suggestions)})
+        return {"suggestions": suggestions}
+    except Exception as e:
+        service.log_error(e, "get_flight_autocomplete endpoint")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Enhanced Communication Endpoints

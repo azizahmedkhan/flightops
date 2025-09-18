@@ -55,8 +55,8 @@ app.router.lifespan_context = lifespan
 
 class Ask(BaseModel):
     question: str
-    flight_no: Optional[str] = None
-    date: Optional[str] = None
+    flight_no: str
+    date: str
 
 def pii_scrub(text: str) -> str:
     import re
@@ -167,10 +167,7 @@ def tool_advanced_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[st
     options = generate_base_rebooking_options(flight_no, date, pax_count, connecting_pax, is_domestic)
     
     # Use LLM to optimize and rank options
-    if OPENAI_API_KEY:
-        optimized_options = optimize_rebooking_with_llm(options, passenger_profiles, flight, impact)
-    else:
-        optimized_options = optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
+    optimized_options = optimize_rebooking_with_llm(options, passenger_profiles, flight, impact)
     
     return optimized_options[:5]  # Return top 5 options
 
@@ -393,10 +390,6 @@ def optimize_rebooking_rule_based(options: List[Dict[str, Any]], passenger_profi
     options.sort(key=lambda x: x["value_score"], reverse=True)
     return options
 
-def tool_rebooking_options(flight_no: str, date: str) -> List[Dict[str, Any]]:
-    """Generate rebooking options - now uses advanced optimizer"""
-    return tool_advanced_rebooking_optimizer(flight_no, date)
-
 def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
     try:
         r = httpx.post(f"{RETRIEVAL_URL}/search", json={"q":question, "k":k})
@@ -416,13 +409,13 @@ def ask(body: Ask, request: Request):
     with LATENCY.labels("agent-svc","/ask","POST").time():
         try:
             q = pii_scrub(body.question)
-            fno = body.flight_no or "NZ123"
-            date = body.date or "2025-09-17"
+            fno = body.flight_no
+            date = body.date
 
             flight = tool_flight_lookup(fno, date)
             impact = tool_impact_assessor(fno, date)
             crew_details = tool_crew_details(fno, date)
-            options = tool_rebooking_options(fno, date)
+            options = tool_advanced_rebooking_optimizer(fno, date)
             policy = tool_policy_grounder(q + " policy rebooking compensation customer communication")
 
             if not ensure_grounded(policy.get("citations", [])):
@@ -455,11 +448,11 @@ def draft_comms(body: Ask, request: Request):
     try:
         # Compose with comms-svc using grounded context
         q = body.question or "Draft email + SMS for affected passengers"
-        fno = body.flight_no or "NZ123"
-        date = body.date or "2025-09-17"
+        fno = body.flight_no
+        date = body.date
         impact = tool_impact_assessor(fno, date)
         crew_details = tool_crew_details(fno, date)
-        options = tool_rebooking_options(fno, date)
+        options = tool_advanced_rebooking_optimizer(fno, date)
         policy = tool_policy_grounder(q)
         if not ensure_grounded(policy.get("citations", [])):
             raise HTTPException(status_code=400, detail="Policy grounding required.")

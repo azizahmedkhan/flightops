@@ -36,20 +36,15 @@ db_pool = None
 DATA_DIR = "/data"
 
 def embed(text: str) -> List[float]:
-    """Generate embeddings if API key is available, otherwise return deterministic fake vectors."""
-    if OPENAI_API_KEY:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=OPENAI_API_KEY)
-            resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
-            return resp.data[0].embedding
-        except Exception as e:
-            service.log_error(e, "embedding generation")
-            # Fall through to fake vectors
-    # fallback: deterministic fake vector
-    import random, hashlib
-    random.seed(int(hashlib.md5(text.encode()).hexdigest(), 16))
-    return [random.random() for _ in range(1536)]
+    """Generate embeddings using OpenAI API."""
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
+        return resp.data[0].embedding
+    except Exception as e:
+        service.log_error(e, "embedding generation")
+        raise e
 
 @asynccontextmanager
 async def lifespan(app):

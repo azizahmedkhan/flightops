@@ -4,9 +4,9 @@ import { createRoot } from 'react-dom/client'
 const API = import.meta.env.VITE_GATEWAY_URL || 'http://localhost:8080'
 
 function App(){
-  const [question, setQuestion] = useState('What is the impact of the delay on NZ123 today?')
-  const [flightNo, setFlightNo] = useState('NZ123')
-  const [date, setDate] = useState('2025-09-17')
+  const [question, setQuestion] = useState('')
+  const [flightNo, setFlightNo] = useState('')
+  const [date, setDate] = useState('')
   const [response, setResponse] = useState(null)
   const [draft, setDraft] = useState(null)
   const [busy, setBusy] = useState(false)

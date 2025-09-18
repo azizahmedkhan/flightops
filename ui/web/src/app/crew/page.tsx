@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Shield
 } from 'lucide-react'
+import FlightNumberInput from '../components/FlightNumberInput'
 
 const crewOptimizationSchema = z.object({
   flight_no: z.string().min(1, 'Flight number is required'),
@@ -86,8 +87,8 @@ export default function CrewPage() {
   const optimizationForm = useForm<CrewOptimizationForm>({
     resolver: zodResolver(crewOptimizationSchema),
     defaultValues: {
-      flight_no: 'NZ123',
-      date: '2025-09-17',
+      flight_no: '',
+      date: '',
       disruption_type: 'weather_delay',
       time_constraint: 2
     }
@@ -96,12 +97,22 @@ export default function CrewPage() {
   const swapForm = useForm<CrewSwapForm>({
     resolver: zodResolver(crewSwapSchema),
     defaultValues: {
-      flight_no: 'NZ123',
-      date: '2025-09-17',
+      flight_no: '',
+      date: '',
       unavailable_crew_id: 'CAP001',
       reason: 'illness'
     }
   })
+
+  const handleOptimizationFlightSelect = (suggestion: any) => {
+    optimizationForm.setValue('flight_no', suggestion.flight_no)
+    optimizationForm.setValue('date', suggestion.flight_date)
+  }
+
+  const handleSwapFlightSelect = (suggestion: any) => {
+    swapForm.setValue('flight_no', suggestion.flight_no)
+    swapForm.setValue('date', suggestion.flight_date)
+  }
 
   const optimizeCrew = async (data: CrewOptimizationForm) => {
     setLoading(true)
@@ -263,10 +274,12 @@ export default function CrewPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...optimizationForm.register('flight_no')}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent transition-colors"
-                    placeholder="NZ123"
+                  <FlightNumberInput
+                    value={optimizationForm.watch('flight_no') || ''}
+                    onChange={(value) => optimizationForm.setValue('flight_no', value)}
+                    onSelect={handleOptimizationFlightSelect}
+                    error={optimizationForm.formState.errors.flight_no?.message}
+                    className="focus:ring-green-600"
                   />
                 </div>
 
@@ -438,10 +451,12 @@ export default function CrewPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...swapForm.register('flight_no')}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent transition-colors"
-                    placeholder="NZ123"
+                  <FlightNumberInput
+                    value={swapForm.watch('flight_no') || ''}
+                    onChange={(value) => swapForm.setValue('flight_no', value)}
+                    onSelect={handleSwapFlightSelect}
+                    error={swapForm.formState.errors.flight_no?.message}
+                    className="focus:ring-green-600"
                   />
                 </div>
 
@@ -589,7 +604,7 @@ export default function CrewPage() {
                     type="date"
                     id="availability-date"
                     className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent"
-                    defaultValue="2025-09-17"
+                    placeholder="Select date"
                   />
                   <select
                     id="availability-role"

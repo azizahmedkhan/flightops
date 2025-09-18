@@ -18,6 +18,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react'
+import FlightNumberInput from '../components/FlightNumberInput'
 
 const commsSchema = z.object({
   flight_no: z.string().min(1, 'Flight number is required'),
@@ -45,11 +46,11 @@ export default function CommsPage() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<CommsForm>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<CommsForm>({
     resolver: zodResolver(commsSchema),
     defaultValues: {
-      flight_no: 'NZ123',
-      date: '2025-09-17',
+      flight_no: '',
+      date: '',
       tone: 'empathetic',
       channel: 'email'
     }
@@ -84,6 +85,13 @@ export default function CommsPage() {
       setLoading(false)
     }
   }
+
+  const handleFlightSelect = (suggestion: any) => {
+    setValue('flight_no', suggestion.flight_no)
+    setValue('date', suggestion.flight_date)
+  }
+
+  const watchedValues = watch()
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -142,15 +150,12 @@ export default function CommsPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...register('flight_no')}
-                    type="text"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                    placeholder="NZ123"
+                  <FlightNumberInput
+                    value={watchedValues.flight_no || ''}
+                    onChange={(value) => setValue('flight_no', value)}
+                    onSelect={handleFlightSelect}
+                    error={errors.flight_no?.message}
                   />
-                  {errors.flight_no && (
-                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.flight_no.message}</p>
-                  )}
                 </div>
 
                 <div>

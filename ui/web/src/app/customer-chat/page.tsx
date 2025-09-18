@@ -22,6 +22,7 @@ import {
   Bot,
   User as UserIcon
 } from 'lucide-react'
+import FlightNumberInput from '../components/FlightNumberInput'
 
 const chatSessionSchema = z.object({
   customer_name: z.string().min(1, 'Name is required'),
@@ -92,8 +93,8 @@ export default function CustomerChatPage() {
       customer_name: 'John Doe',
       customer_email: 'john.doe@example.com',
       customer_phone: '+1234567890',
-      flight_no: 'NZ123',
-      date: '2025-09-17'
+      flight_no: '',
+      date: ''
     }
   })
 
@@ -108,12 +109,22 @@ export default function CustomerChatPage() {
       customer_name: 'John Doe',
       customer_email: 'john.doe@example.com',
       customer_phone: '+1234567890',
-      flight_no: 'NZ123',
-      date: '2025-09-17',
+      flight_no: '',
+      date: '',
       communication_type: 'email',
       tone: 'empathetic'
     }
   })
+
+  const handleChatFlightSelect = (suggestion: any) => {
+    chatSessionForm.setValue('flight_no', suggestion.flight_no)
+    chatSessionForm.setValue('date', suggestion.flight_date)
+  }
+
+  const handleCommunicationFlightSelect = (suggestion: any) => {
+    communicationForm.setValue('flight_no', suggestion.flight_no)
+    communicationForm.setValue('date', suggestion.flight_date)
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -379,10 +390,11 @@ export default function CustomerChatPage() {
                     <label className="block text-sm font-semibold text-gray-900 mb-2">
                       Flight Number
                     </label>
-                    <input
-                      {...chatSessionForm.register('flight_no')}
-                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                      placeholder="NZ123"
+                    <FlightNumberInput
+                      value={chatSessionForm.watch('flight_no') || ''}
+                      onChange={(value) => chatSessionForm.setValue('flight_no', value)}
+                      onSelect={handleChatFlightSelect}
+                      error={chatSessionForm.formState.errors.flight_no?.message}
                     />
                   </div>
                   <div>
@@ -540,9 +552,11 @@ export default function CustomerChatPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...communicationForm.register('flight_no')}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
+                  <FlightNumberInput
+                    value={communicationForm.watch('flight_no') || ''}
+                    onChange={(value) => communicationForm.setValue('flight_no', value)}
+                    onSelect={handleCommunicationFlightSelect}
+                    error={communicationForm.formState.errors.flight_no?.message}
                   />
                 </div>
                 <div>
@@ -636,9 +650,11 @@ export default function CustomerChatPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...communicationForm.register('flight_no')}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
+                  <FlightNumberInput
+                    value={communicationForm.watch('flight_no') || ''}
+                    onChange={(value) => communicationForm.setValue('flight_no', value)}
+                    onSelect={handleCommunicationFlightSelect}
+                    error={communicationForm.formState.errors.flight_no?.message}
                   />
                 </div>
                 <div>

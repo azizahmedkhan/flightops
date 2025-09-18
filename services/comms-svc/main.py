@@ -187,10 +187,10 @@ def generate_multilingual_comms(context: Dict[str, Any], target_languages: List[
 
 def render_template(context: Dict[str, Any], channel: str) -> str:
     """Render the appropriate template based on channel."""
-    # Prepare context with defaults
+    # Prepare context - all values should come from the request
     template_context = {
-        "flight_no": context.get("flight_no", "NZ123"),
-        "date": context.get("date", "2025-09-17"),
+        "flight_no": context.get("flight_no"),
+        "date": context.get("date"),
         "issue": context.get("issue", "operational delay"),
         "impact_summary": context.get("impact_summary", "Passengers affected"),
         "options_summary": context.get("options_summary", "Rebooking in progress"),

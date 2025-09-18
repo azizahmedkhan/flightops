@@ -147,18 +147,18 @@ export default function HomePage() {
           <h3 className="text-xl font-bold text-black mb-6">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
-              href="/query?flight=NZ123&date=2025-09-17"
+              href="/query"
               className="flex items-center justify-center px-4 py-3 bg-black/10 text-black rounded-lg hover:bg-black/20 transition-colors font-semibold"
             >
               <Plane className="h-4 w-4 mr-2" />
-              Check NZ123 Status
+              Ask Flight Questions
             </Link>
             <Link
-              href="/comms?flight=NZ123&date=2025-09-17"
+              href="/comms"
               className="flex items-center justify-center px-4 py-3 bg-gray-800/10 text-gray-800 rounded-lg hover:bg-gray-800/20 transition-colors font-semibold"
             >
               <MessageSquare className="h-4 w-4 mr-2" />
-              Draft Customer Message
+              Draft Communications
             </Link>
             <Link
               href="/data"

@@ -20,6 +20,7 @@ import {
   Target,
   Zap
 } from 'lucide-react'
+import FlightNumberInput from '../components/FlightNumberInput'
 
 const predictionSchema = z.object({
   flight_no: z.string().min(1, 'Flight number is required'),
@@ -63,14 +64,19 @@ export default function PredictivePage() {
   const form = useForm<PredictionForm>({
     resolver: zodResolver(predictionSchema),
     defaultValues: {
-      flight_no: 'NZ123',
-      date: '2025-09-17',
+      flight_no: '',
+      date: '',
       hours_ahead: 4,
       include_weather: true,
       include_crew: true,
       include_aircraft: true
     }
   })
+
+  const handleFlightSelect = (suggestion: any) => {
+    form.setValue('flight_no', suggestion.flight_no)
+    form.setValue('date', suggestion.flight_date)
+  }
 
   const predictDisruption = async (data: PredictionForm) => {
     setLoading(true)
@@ -211,10 +217,12 @@ export default function PredictivePage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...form.register('flight_no')}
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-colors"
-                    placeholder="NZ123"
+                  <FlightNumberInput
+                    value={form.watch('flight_no') || ''}
+                    onChange={(value) => form.setValue('flight_no', value)}
+                    onSelect={handleFlightSelect}
+                    error={form.formState.errors.flight_no?.message}
+                    className="focus:ring-blue-600"
                   />
                   {form.formState.errors.flight_no && (
                     <p className="mt-1 text-sm text-red-600 font-medium">

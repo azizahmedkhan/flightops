@@ -17,6 +17,8 @@ import {
   Users,
   DollarSign
 } from 'lucide-react'
+import QuestionSelector from '../components/QuestionSelector'
+import FlightNumberInput from '../components/FlightNumberInput'
 
 const querySchema = z.object({
   question: z.string().min(1, 'Question is required'),
@@ -61,12 +63,12 @@ export default function QueryPage() {
   const [response, setResponse] = useState<QueryResponse | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<QueryForm>({
+  const { register, handleSubmit, formState: { errors }, watch, setValue } = useForm<QueryForm>({
     resolver: zodResolver(querySchema),
     defaultValues: {
-      question: 'What is the impact of the delay on NZ123 today?',
-      flight_no: 'NZ123',
-      date: '2025-09-17'
+      question: '',
+      flight_no: '',
+      date: ''
     }
   })
 
@@ -95,6 +97,17 @@ export default function QueryPage() {
       setLoading(false)
     }
   }
+
+  const handleQuestionSelect = (question: string) => {
+    setValue('question', question)
+  }
+
+  const handleFlightSelect = (suggestion: any) => {
+    setValue('flight_no', suggestion.flight_no)
+    setValue('date', suggestion.flight_date)
+  }
+
+  const watchedValues = watch()
 
   return (
     <div className="min-h-screen relative">
@@ -129,11 +142,16 @@ export default function QueryPage() {
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Question
                 </label>
+                <QuestionSelector
+                  onQuestionSelect={handleQuestionSelect}
+                  flightNo={watchedValues.flight_no || ''}
+                  date={watchedValues.date || ''}
+                />
                 <textarea
                   {...register('question')}
                   rows={3}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                  placeholder="What is the impact of the delay on NZ123 today?"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors mt-2"
+                  placeholder="Enter your question or select from common questions above..."
                 />
                 {errors.question && (
                   <p className="mt-1 text-sm text-red-600 font-medium">{errors.question.message}</p>
@@ -145,15 +163,12 @@ export default function QueryPage() {
                   <label className="block text-sm font-semibold text-gray-900 mb-2">
                     Flight Number
                   </label>
-                  <input
-                    {...register('flight_no')}
-                    type="text"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-colors"
-                    placeholder="NZ123"
+                  <FlightNumberInput
+                    value={watchedValues.flight_no || ''}
+                    onChange={(value) => setValue('flight_no', value)}
+                    onSelect={handleFlightSelect}
+                    error={errors.flight_no?.message}
                   />
-                  {errors.flight_no && (
-                    <p className="mt-1 text-sm text-red-600 font-medium">{errors.flight_no.message}</p>
-                  )}
                 </div>
 
                 <div>

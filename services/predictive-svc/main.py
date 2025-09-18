@@ -284,8 +284,8 @@ def predict_disruptions(req: PredictionRequest, request: Request):
     """Predict potential disruptions for flights"""
     with LATENCY.labels("predictive-svc", "/predict_disruptions", "POST").time():
         try:
-            flight_no = req.flight_no or "NZ123"
-            date = req.date or datetime.now().strftime("%Y-%m-%d")
+            flight_no = req.flight_no
+            date = req.date
             
             # Get flight data
             with db_pool.connection() as conn:
