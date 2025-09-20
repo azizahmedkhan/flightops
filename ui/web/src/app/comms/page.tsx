@@ -77,6 +77,13 @@ export default function CommsPage() {
 
       const result = await res.json()
       setResponse(result)
+      
+      // Dispatch custom event if LLM message is present
+      if (result.llm_message) {
+        const event = new CustomEvent('llm-message', { detail: result.llm_message })
+        window.dispatchEvent(event)
+      }
+      
       toast.success('Communication drafted successfully!')
     } catch (error) {
       toast.error('Failed to draft communication. Please try again.')

@@ -21,6 +21,13 @@ function App(){
     setBusy(true)
     const r = await fetch(`${API}/ask`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question, flight_no: flightNo, date})}).then(r=>r.json())
     setResponse(r)
+    
+    // Dispatch custom event if LLM message is present
+    if (r.llm_message) {
+      const event = new CustomEvent('llm-message', { detail: r.llm_message })
+      window.dispatchEvent(event)
+    }
+    
     setBusy(false)
   }
 
@@ -28,6 +35,13 @@ function App(){
     setBusy(true)
     const r = await fetch(`${API}/draft_comms`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question:'Draft email and sms', flight_no: flightNo, date})}).then(r=>r.json())
     setDraft(r)
+    
+    // Dispatch custom event if LLM message is present
+    if (r.llm_message) {
+      const event = new CustomEvent('llm-message', { detail: r.llm_message })
+      window.dispatchEvent(event)
+    }
+    
     setBusy(false)
   }
 

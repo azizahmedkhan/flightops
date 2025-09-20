@@ -459,11 +459,11 @@ def ensure_grounded(citations: List[str]) -> bool:
     if ALLOW_UNGROUNDED: return True
     return len(citations) > 0
 
-@app.post("/ask")
-def ask(body: Ask, request: Request):
-    with LATENCY.labels("agent-svc","/ask","POST").time():
+@app.post("/analyze-disruption")
+def analyze_disruption(body: Ask, request: Request):
+    with LATENCY.labels("agent-svc","/analyze-disruption","POST").time():
         try:
-            print(f"DEBUG: /ask endpoint called with question: {body.question}")
+            print(f"DEBUG: /analyze-disruption endpoint called with question: {body.question}")
             q = pii_scrub(body.question)
             fno = body.flight_no
             date = body.date
@@ -507,7 +507,7 @@ def ask(body: Ask, request: Request):
             service.log_request(request, {"status": "success"})
             return result
         except Exception as e:
-            service.log_error(e, "ask endpoint")
+            service.log_error(e, "analyze-disruption endpoint")
             raise
 
 @app.post("/test_llm")

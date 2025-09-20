@@ -60,21 +60,43 @@ Requirements:
 
 Return only the translated text."""
 
-    SENTIMENT_ANALYSIS = """Analyze the sentiment of this customer communication:
+    SENTIMENT_ANALYSIS = """Analyze the following customer message and generate two outputs inside a single JSON object:
 
-{text}
+response_to_customer: A short, empathetic reply suitable for the customer.
+
+analysis: A structured sentiment analysis with the following fields:
+
+sentiment (positive/neutral/negative)
+
+sentiment_score (range: -1.0 to 1.0)
+
+key_emotions_detected (list)
+
+urgency_level (low/medium/high)
+
+recommended_response_tone (empathetic/professional/urgent)
+
+key_concerns (list)
+
+Customer Message:
+"{text}"
 
 {context_str}
 
-Provide:
-1. Sentiment (positive/neutral/negative)
-2. Sentiment score (-1.0 to 1.0)
-3. Key emotions detected (list)
-4. Urgency level (low/medium/high)
-5. Recommended response tone (empathetic/professional/urgent)
-6. Key concerns (list)
+Output Format (JSON):
 
-Format as JSON."""
+{{
+  "customer_message": "{text}",
+  "response_to_customer": "<empathetic reply>",
+  "analysis": {{
+    "sentiment": "",
+    "sentiment_score": 0.0,
+    "key_emotions_detected": [],
+    "urgency_level": "",
+    "recommended_response_tone": "",
+    "key_concerns": []
+  }}
+}}"""
 
     # Predictive Service Prompts
     DISRUPTION_PREDICTION = """

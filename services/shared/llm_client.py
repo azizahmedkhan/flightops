@@ -6,9 +6,10 @@ Provides a single interface for all OpenAI chat completions with built-in loggin
 import json
 import time
 import os
+import requests
 from typing import Dict, Any, Optional, List, Union
 from openai import OpenAI
-from llm_tracker import LLMTracker
+from .llm_tracker import LLMTracker
 
 
 class LLMClient:
@@ -26,11 +27,31 @@ class LLMClient:
         self.service_name = service_name
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.model = model
+        self.gateway_url = os.getenv("GATEWAY_URL", "http://gateway-api:8080")
         
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
         
         self.client = OpenAI(api_key=self.api_key)
+    
+    def _send_message_to_gateway(self, message: Dict[str, Any]) -> None:
+        """
+        Send a tracked LLM message to the gateway API for centralized storage.
+        
+        Args:
+            message: The tracked LLM message to send
+        """
+        try:
+            response = requests.post(
+                f"{self.gateway_url}/llm/track",
+                json=message,
+                timeout=5
+            )
+            if response.status_code != 200:
+                print(f"Warning: Failed to send LLM message to gateway: {response.status_code}")
+        except Exception as e:
+            # Don't fail the main operation if tracking fails
+            print(f"Warning: Failed to send LLM message to gateway: {e}")
     
     def chat_completion(
         self,
@@ -92,6 +113,9 @@ class LLMClient:
                 metadata=tracking_metadata
             )
             
+            # Send the tracked message to the gateway API
+            self._send_message_to_gateway(llm_message)
+            
             return {
                 "content": content,
                 "response": response,
@@ -120,6 +144,9 @@ class LLMClient:
                 duration_ms=duration_ms,
                 metadata=error_metadata
             )
+            
+            # Send the error message to the gateway API
+            self._send_message_to_gateway(error_message)
             
             # Re-raise the exception
             raise e

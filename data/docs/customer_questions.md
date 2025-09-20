@@ -113,7 +113,7 @@ This document contains a comprehensive list of questions that customers can choo
 
 ## Integration Notes
 
-- Questions are designed to work with the existing `/ask` endpoint
+- Questions are designed to work with the existing `/ask` endpoint (which forwards to `/analyze-disruption`)
 - All questions require `flight_no` and `date` parameters
 - Questions trigger appropriate tool functions automatically
 - Results include policy citations and grounded responses

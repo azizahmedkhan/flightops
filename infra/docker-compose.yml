@@ -104,7 +104,7 @@ services:
         condition: service_started
       retrieval-svc:
         condition: service_started
-    ports: ["8087:8085"]
+    ports: ["8087:8087"]
 
   predictive-svc:
     build:
@@ -142,6 +142,35 @@ services:
         condition: service_healthy
     ports: ["8086:8086"]
 
+  scalable-chatbot-svc:
+    build:
+      context: ..
+      dockerfile: services/scalable-chatbot-svc/Dockerfile
+    
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - RETRIEVAL_URL=http://retrieval-svc:8081
+      - AGENT_URL=http://agent-svc:8082
+      - COMMS_URL=http://comms-svc:8083
+    depends_on:
+      redis:
+        condition: service_started
+      retrieval-svc:
+        condition: service_started
+      agent-svc:
+        condition: service_started
+      comms-svc:
+        condition: service_started
+    ports: ["8088:8088"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   gateway-api:
     build:
       context: ..
@@ -152,7 +181,7 @@ services:
       - RETRIEVAL_URL=http://retrieval-svc:8081
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
-      - CUSTOMER_CHAT_URL=http://customer-chat-svc:8085
+      - CUSTOMER_CHAT_URL=http://customer-chat-svc:8087
       - PREDICTIVE_URL=http://predictive-svc:8085
       - CREW_URL=http://crew-svc:8086
       - DB_HOST=db

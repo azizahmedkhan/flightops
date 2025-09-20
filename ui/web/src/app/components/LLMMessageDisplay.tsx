@@ -52,12 +52,16 @@ export default function LLMMessageDisplay({ className = '' }: LLMMessageDisplayP
     setLoading(true)
     try {
       console.log('Loading LLM messages...')
+      console.log('API URL:', process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080')
       const response = await llmApi.getMessages(50)
       console.log('LLM messages response:', response)
+      console.log('Messages count:', response.messages?.length || 0)
       setMessages(response.messages)
     } catch (error) {
       console.error('Failed to load LLM messages:', error)
-      toast.error('Failed to load LLM messages')
+      console.error('Error details:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      toast.error(`Failed to load LLM messages: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
@@ -114,6 +118,13 @@ export default function LLMMessageDisplay({ className = '' }: LLMMessageDisplayP
           <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
           <p className="text-sm text-gray-600 font-medium">No LLM messages yet</p>
           <p className="text-xs text-gray-500">Messages will appear here as you interact with the system</p>
+          <button
+            onClick={loadMessages}
+            disabled={loading}
+            className="mt-2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
         </div>
       </div>
     )

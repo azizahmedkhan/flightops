@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,7 +15,8 @@ import {
   CheckCircle,
   Clock,
   Users,
-  DollarSign
+  DollarSign,
+  X
 } from 'lucide-react'
 import QuestionSelector from '../components/QuestionSelector'
 import FlightNumberInput from '../components/FlightNumberInput'
@@ -72,9 +73,39 @@ export default function QueryPage() {
     }
   })
 
+  // Load saved state from localStorage on component mount
+  useEffect(() => {
+    const savedResponse = localStorage.getItem('agent-query-response')
+    const savedFormData = localStorage.getItem('agent-query-form')
+    
+    if (savedResponse) {
+      try {
+        setResponse(JSON.parse(savedResponse))
+      } catch (error) {
+        console.error('Failed to parse saved response:', error)
+        localStorage.removeItem('agent-query-response')
+      }
+    }
+    
+    if (savedFormData) {
+      try {
+        const formData = JSON.parse(savedFormData)
+        setValue('question', formData.question || '')
+        setValue('flight_no', formData.flight_no || '')
+        setValue('date', formData.date || '')
+      } catch (error) {
+        console.error('Failed to parse saved form data:', error)
+        localStorage.removeItem('agent-query-form')
+      }
+    }
+  }, [setValue])
+
   const onSubmit = async (data: QueryForm) => {
     setLoading(true)
     try {
+      // Save form data to localStorage
+      localStorage.setItem('agent-query-form', JSON.stringify(data))
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'}/ask`, {
         method: 'POST',
         headers: {
@@ -89,6 +120,16 @@ export default function QueryPage() {
 
       const result = await res.json()
       setResponse(result)
+      
+      // Dispatch custom event if LLM message is present
+      if (result.llm_message) {
+        const event = new CustomEvent('llm-message', { detail: result.llm_message })
+        window.dispatchEvent(event)
+      }
+      
+      // Save response to localStorage
+      localStorage.setItem('agent-query-response', JSON.stringify(result))
+      
       toast.success('Query processed successfully!')
     } catch (error) {
       toast.error('Failed to process query. Please try again.')
@@ -107,7 +148,24 @@ export default function QueryPage() {
     setValue('date', suggestion.flight_date)
   }
 
+  // Save form data to localStorage whenever it changes
   const watchedValues = watch()
+  useEffect(() => {
+    if (watchedValues.question || watchedValues.flight_no || watchedValues.date) {
+      localStorage.setItem('agent-query-form', JSON.stringify(watchedValues))
+    }
+  }, [watchedValues])
+
+  // Clear all saved state
+  const clearState = () => {
+    setResponse(null)
+    setValue('question', '')
+    setValue('flight_no', '')
+    setValue('date', '')
+    localStorage.removeItem('agent-query-response')
+    localStorage.removeItem('agent-query-form')
+    toast.success('Query state cleared!')
+  }
 
   return (
     <div className="min-h-screen relative">
@@ -124,9 +182,21 @@ export default function QueryPage() {
                 <p className="text-sm text-gray-300">Ask questions about flight disruptions</p>
               </div>
             </div>
-            <Link href="/" className="text-sm font-medium text-white hover:text-gray-200">
-              Back to Home
-            </Link>
+            <div className="flex items-center space-x-4">
+              {(response || watchedValues.question || watchedValues.flight_no || watchedValues.date) && (
+                <button
+                  onClick={clearState}
+                  className="text-sm font-medium text-white hover:text-gray-200 flex items-center space-x-1"
+                  title="Clear query and results"
+                >
+                  <X className="h-4 w-4" />
+                  <span>Clear</span>
+                </button>
+              )}
+              <Link href="/" className="text-sm font-medium text-white hover:text-gray-200">
+                Back to Home
+              </Link>
+            </div>
           </div>
         </div>
       </header>

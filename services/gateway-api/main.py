@@ -277,7 +277,7 @@ async def seed(request: Request):
 async def ask(payload: dict, request: Request):
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.post(f"{AGENT_URL}/ask", json=payload, timeout=60.0)
+            r = await client.post(f"{AGENT_URL}/analyze-disruption", json=payload, timeout=60.0)
             result = r.json()
             
             # Track LLM message if present in response

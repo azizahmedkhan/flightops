@@ -1,0 +1,268 @@
+"""
+Utility functions for the scalable chatbot service
+"""
+
+import hashlib
+import json
+import time
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
+import httpx
+import asyncio
+
+
+async def fetch_flight_context(flight_no: str, date: str, agent_url: str) -> Optional[Dict[str, Any]]:
+    """Fetch flight context from agent service"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{agent_url}/get_flight_context",
+                json={"flight_no": flight_no, "date": date}
+            )
+            if response.status_code == 200:
+                return response.json()
+    except Exception as e:
+        print(f"Error fetching flight context: {e}")
+    return None
+
+
+async def fetch_policy_context(query: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
+    """Fetch policy context from retrieval service"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{retrieval_url}/search",
+                json={"q": query, "k": 3}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("results", [])
+    except Exception as e:
+        print(f"Error fetching policy context: {e}")
+    return None
+
+
+def calculate_query_hash(session_id: str, message: str, context: Dict[str, Any]) -> str:
+    """Calculate hash for caching queries"""
+    # Create a deterministic string from the inputs
+    query_string = f"{session_id}:{message}:{json.dumps(context, sort_keys=True)}"
+    return hashlib.md5(query_string.encode()).hexdigest()
+
+
+def sanitize_message(message: str) -> str:
+    """Sanitize user message for processing"""
+    # Remove potential harmful characters and limit length
+    sanitized = message.strip()[:1000]  # Limit to 1000 characters
+    
+    # Remove common injection patterns
+    dangerous_patterns = ["<script", "javascript:", "data:", "vbscript:"]
+    for pattern in dangerous_patterns:
+        sanitized = sanitized.replace(pattern, "")
+    
+    return sanitized
+
+
+def format_response_chunk(chunk_type: str, content: str, session_id: str, 
+                         metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Format a response chunk for WebSocket transmission"""
+    return {
+        "type": chunk_type,
+        "content": content,
+        "session_id": session_id,
+        "timestamp": datetime.now().isoformat(),
+        "metadata": metadata or {}
+    }
+
+
+async def batch_process_messages(messages: List[Dict[str, Any]], 
+                               process_func, 
+                               batch_size: int = 10) -> List[Any]:
+    """Process messages in batches for better performance"""
+    results = []
+    
+    for i in range(0, len(messages), batch_size):
+        batch = messages[i:i + batch_size]
+        batch_tasks = [process_func(msg) for msg in batch]
+        batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        results.extend(batch_results)
+        
+        # Small delay between batches to prevent overwhelming the system
+        if i + batch_size < len(messages):
+            await asyncio.sleep(0.1)
+    
+    return results
+
+
+def extract_entities(message: str) -> Dict[str, List[str]]:
+    """Extract entities from user message"""
+    entities = {
+        "flight_numbers": [],
+        "dates": [],
+        "emails": [],
+        "phone_numbers": []
+    }
+    
+    import re
+    
+    # Flight numbers (basic pattern)
+    flight_pattern = r'\b[A-Z]{2,3}\d{3,4}\b'
+    entities["flight_numbers"] = re.findall(flight_pattern, message.upper())
+    
+    # Dates (basic patterns)
+    date_patterns = [
+        r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',  # MM/DD/YYYY or MM-DD-YYYY
+        r'\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b',    # YYYY/MM/DD or YYYY-MM-DD
+        r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{4}\b',  # Month DD, YYYY
+    ]
+    
+    for pattern in date_patterns:
+        entities["dates"].extend(re.findall(pattern, message.lower()))
+    
+    # Email addresses
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    entities["emails"] = re.findall(email_pattern, message)
+    
+    # Phone numbers (basic pattern)
+    phone_pattern = r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
+    entities["phone_numbers"] = re.findall(phone_pattern, message)
+    
+    return entities
+
+
+def calculate_similarity_score(text1: str, text2: str) -> float:
+    """Calculate simple similarity score between two texts"""
+    # Simple word-based similarity
+    words1 = set(text1.lower().split())
+    words2 = set(text2.lower().split())
+    
+    if not words1 or not words2:
+        return 0.0
+    
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    
+    return len(intersection) / len(union) if union else 0.0
+
+
+async def cleanup_expired_sessions(redis_manager, max_age_hours: int = 24):
+    """Clean up expired sessions from Redis"""
+    try:
+        # This would need to be implemented based on your Redis key pattern
+        # For now, this is a placeholder
+        print(f"Cleaning up sessions older than {max_age_hours} hours")
+    except Exception as e:
+        print(f"Error cleaning up sessions: {e}")
+
+
+def generate_session_stats(session_context: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate statistics for a session"""
+    stats = {
+        "message_count": session_context.get("message_count", 0),
+        "created_at": session_context.get("created_at"),
+        "last_activity": session_context.get("last_activity"),
+        "has_flight_context": bool(session_context.get("flight_data")),
+        "has_policy_context": bool(session_context.get("policy_data")),
+        "customer_name": session_context.get("customer_name"),
+        "flight_no": session_context.get("flight_no")
+    }
+    
+    # Calculate session duration
+    if stats["created_at"] and stats["last_activity"]:
+        try:
+            created = datetime.fromisoformat(stats["created_at"].replace('Z', '+00:00'))
+            last_activity = datetime.fromisoformat(stats["last_activity"].replace('Z', '+00:00'))
+            duration = last_activity - created
+            stats["session_duration_minutes"] = duration.total_seconds() / 60
+        except:
+            stats["session_duration_minutes"] = None
+    
+    return stats
+
+
+def validate_session_data(session_data: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Validate session data and return any errors"""
+    errors = []
+    
+    required_fields = ["customer_name", "customer_email"]
+    for field in required_fields:
+        if not session_data.get(field):
+            errors.append(f"Missing required field: {field}")
+    
+    # Validate email format
+    email = session_data.get("customer_email", "")
+    if email and "@" not in email:
+        errors.append("Invalid email format")
+    
+    # Validate flight number format (if provided)
+    flight_no = session_data.get("flight_no", "")
+    if flight_no and len(flight_no) < 3:
+        errors.append("Flight number appears to be too short")
+    
+    return {"errors": errors, "valid": len(errors) == 0}
+
+
+def create_response_template(response_type: str, session_id: str) -> Dict[str, Any]:
+    """Create a standardized response template"""
+    base_template = {
+        "session_id": session_id,
+        "timestamp": datetime.now().isoformat(),
+        "type": response_type
+    }
+    
+    if response_type == "error":
+        base_template.update({
+            "error_code": "UNKNOWN_ERROR",
+            "message": "An unexpected error occurred"
+        })
+    elif response_type == "success":
+        base_template.update({
+            "status": "success",
+            "data": {}
+        })
+    elif response_type == "streaming":
+        base_template.update({
+            "content": "",
+            "is_complete": False
+        })
+    
+    return base_template
+
+
+async def monitor_system_health(redis_manager, connection_manager) -> Dict[str, Any]:
+    """Monitor system health and performance"""
+    health_status = {
+        "timestamp": datetime.now().isoformat(),
+        "redis_connected": bool(redis_manager.redis_client),
+        "active_connections": len(connection_manager.active_connections),
+        "active_sessions": len(connection_manager.session_connections),
+        "memory_usage_mb": 0,  # Would need psutil or similar
+        "cpu_usage_percent": 0  # Would need psutil or similar
+    }
+    
+    # Check Redis connectivity
+    try:
+        if redis_manager.redis_client:
+            await redis_manager.redis_client.ping()
+            health_status["redis_ping"] = True
+        else:
+            health_status["redis_ping"] = False
+    except:
+        health_status["redis_ping"] = False
+    
+    # Calculate average connection duration
+    if connection_manager.connection_metadata:
+        current_time = datetime.now()
+        durations = []
+        for metadata in connection_manager.connection_metadata.values():
+            try:
+                connected_at = metadata["connected_at"]
+                duration = (current_time - connected_at).total_seconds()
+                durations.append(duration)
+            except:
+                pass
+        
+        if durations:
+            health_status["avg_connection_duration_seconds"] = sum(durations) / len(durations)
+            health_status["max_connection_duration_seconds"] = max(durations)
+    
+    return health_status

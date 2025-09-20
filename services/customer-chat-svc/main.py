@@ -10,8 +10,15 @@ from fastapi import Request, HTTPException
 from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+sys.path.append(os.path.dirname(__file__))
 
 from base_service import BaseService
+from utils import (
+    generate_natural_language_response,
+    lookup_flight_data,
+    lookup_policy_data,
+    enhance_sentiment_analysis_with_context
+)
 
 # Initialize base service
 service = BaseService("customer-chat-svc", "1.0.0")
@@ -86,13 +93,50 @@ def create_chat_session(request: ChatSessionCreate, req: Request):
 
 @app.post("/chat/message")
 def send_chat_message(message: ChatMessage, req: Request):
-    """Send a message in a chat session with sentiment analysis"""
+    """Send a message in a chat session with natural language response generation"""
     try:
         if message.session_id not in chat_sessions:
             raise HTTPException(status_code=404, detail="Chat session not found")
         
-        # Analyze sentiment of customer message
-        sentiment_analysis = analyze_customer_sentiment(message.message, message.session_id)
+        # Get session context
+        session = chat_sessions[message.session_id]
+        
+        # Analyze sentiment of customer message and get LLM-generated response
+        sentiment_response = analyze_customer_sentiment(message.message, message.session_id)
+        
+        # Extract the analysis part for internal tracking
+        sentiment_analysis = sentiment_response.get("analysis", {})
+        
+        # Enhance sentiment analysis with context
+        enhanced_sentiment = enhance_sentiment_analysis_with_context(
+            sentiment_analysis, message.message, session
+        )
+        
+        # Look up flight data for flight-related inquiries
+        flight_data = None
+        policy_data = None
+        
+        # Determine if we need to look up flight or policy data
+        customer_message_lower = message.message.lower()
+        needs_flight_data = any(word in customer_message_lower for word in 
+                              ["flight", "on time", "delayed", "airport", "crew", "aircraft", "departure", "arrival"])
+        needs_policy_data = any(word in customer_message_lower for word in 
+                              ["policy", "compensation", "refund", "rebook", "rights", "entitled"])
+        
+        if needs_flight_data:
+            flight_data = lookup_flight_data(session["flight_no"], session["date"], AGENT_URL)
+        
+        if needs_policy_data:
+            policy_data = lookup_policy_data(message.message, RETRIEVAL_URL)
+        
+        # Generate natural language response using the new format
+        natural_response = generate_natural_language_response(
+            customer_message=message.message,
+            sentiment_response=sentiment_response,
+            flight_data=flight_data,
+            policy_data=policy_data,
+            session_context=session
+        )
         
         # Store customer message with sentiment data
         customer_msg = {
@@ -103,67 +147,27 @@ def send_chat_message(message: ChatMessage, req: Request):
             "customer_name": message.customer_name,
             "customer_email": message.customer_email,
             "customer_phone": message.customer_phone,
-            "sentiment": sentiment_analysis
+            "sentiment": enhanced_sentiment
         }
         
         message_history[message.session_id].append(customer_msg)
         
-        # Get flight context for AI response
-        session = chat_sessions[message.session_id]
-        
-        # Adjust response based on sentiment
-        response_tone = sentiment_analysis.get("recommended_tone", "empathetic")
-        
-        # Call agent service for AI response
-        try:
-            agent_response = httpx.post(
-                f"{AGENT_URL}/ask",
-                json={
-                    "question": message.message,
-                    "flight_no": session["flight_no"],
-                    "date": session["date"]
-                },
-                timeout=30.0
-            )
-            
-            if agent_response.status_code == 200:
-                agent_data = agent_response.json()
-                
-                # Enhance response with sentiment-aware communication
-                enhanced_response = enhance_response_with_sentiment(
-                    agent_data, sentiment_analysis, session
-                )
-                
-                ai_response = {
-                    "id": str(uuid.uuid4()),
-                    "type": "agent",
-                    "message": enhanced_response.get("message", "I'm here to help with your flight inquiry."),
-                    "timestamp": datetime.now().isoformat(),
-                    "flight_info": agent_data.get("tools_payload", {}).get("flight", {}),
-                    "impact": agent_data.get("tools_payload", {}).get("impact", {}),
-                    "options": agent_data.get("tools_payload", {}).get("options", []),
-                    "citations": agent_data.get("answer", {}).get("citations", []),
-                    "sentiment_aware": True,
-                    "response_tone": response_tone,
-                    "escalation_recommended": sentiment_analysis.get("urgency_level") == "high"
-                }
-            else:
-                ai_response = {
-                    "id": str(uuid.uuid4()),
-                    "type": "agent",
-                    "message": "I apologize, but I'm having trouble accessing flight information right now. Please try again later or contact our support team.",
-                    "timestamp": datetime.now().isoformat(),
-                    "sentiment_aware": False
-                }
-        except Exception as e:
-            service.log_error(e, "agent_call")
-            ai_response = {
-                "id": str(uuid.uuid4()),
-                "type": "agent",
-                "message": "I'm sorry, I'm experiencing technical difficulties. Please try again or contact our support team.",
-                "timestamp": datetime.now().isoformat(),
-                "sentiment_aware": False
+        # Create AI response with natural language
+        ai_response = {
+            "id": str(uuid.uuid4()),
+            "type": "agent",
+            "message": natural_response,
+            "timestamp": datetime.now().isoformat(),
+            "flight_info": flight_data or {},
+            "policy_citations": policy_data or [],
+            "sentiment_aware": True,
+            "response_tone": enhanced_sentiment.get("recommended_tone", "empathetic"),
+            "escalation_recommended": enhanced_sentiment.get("urgency_level") == "high",
+            "data_sources": {
+                "flight_data_used": flight_data is not None,
+                "policy_data_used": policy_data is not None
             }
+        }
         
         message_history[message.session_id].append(ai_response)
         chat_sessions[message.session_id]["last_activity"] = datetime.now().isoformat()
@@ -173,18 +177,26 @@ def send_chat_message(message: ChatMessage, req: Request):
             chat_sessions[message.session_id]["sentiment_insights"] = []
         chat_sessions[message.session_id]["sentiment_insights"].append({
             "timestamp": datetime.now().isoformat(),
-            "sentiment": sentiment_analysis.get("sentiment"),
-            "urgency": sentiment_analysis.get("urgency_level"),
-            "escalation_needed": sentiment_analysis.get("urgency_level") == "high"
+            "sentiment": enhanced_sentiment.get("sentiment"),
+            "urgency": enhanced_sentiment.get("urgency_level"),
+            "escalation_needed": enhanced_sentiment.get("urgency_level") == "high",
+            "recommended_actions": enhanced_sentiment.get("recommended_actions", [])
         })
         
-        service.log_request(req, {"status": "success", "session_id": message.session_id, "sentiment": sentiment_analysis.get("sentiment")})
+        service.log_request(req, {
+            "status": "success", 
+            "session_id": message.session_id, 
+            "sentiment": enhanced_sentiment.get("sentiment"),
+            "flight_data_used": flight_data is not None,
+            "policy_data_used": policy_data is not None
+        })
+        
         return {
             "session_id": message.session_id,
             "customer_message": customer_msg,
             "ai_response": ai_response,
             "message_count": len(message_history[message.session_id]),
-            "sentiment_analysis": sentiment_analysis
+            "sentiment_analysis": enhanced_sentiment
         }
         
     except HTTPException:
@@ -257,32 +269,6 @@ def analyze_sentiment_fallback(message: str) -> Dict[str, Any]:
         "analysis_method": "fallback"
     }
 
-def enhance_response_with_sentiment(agent_data: Dict[str, Any], sentiment_analysis: Dict[str, Any], 
-                                  session: Dict[str, Any]) -> Dict[str, Any]:
-    """Enhance AI response based on customer sentiment"""
-    base_message = agent_data.get("answer", {}).get("issue", "I'm here to help with your flight inquiry.")
-    sentiment = sentiment_analysis.get("sentiment", "neutral")
-    urgency = sentiment_analysis.get("urgency_level", "low")
-    
-    # Enhance message based on sentiment
-    if sentiment == "negative" and urgency == "high":
-        enhanced_message = f"I understand your frustration and I'm here to help resolve this immediately. {base_message}"
-    elif sentiment == "negative":
-        enhanced_message = f"I sincerely apologize for the inconvenience. {base_message}"
-    elif sentiment == "positive":
-        enhanced_message = f"Thank you for your patience. {base_message}"
-    else:
-        enhanced_message = base_message
-    
-    # Add escalation recommendation if needed
-    if urgency == "high":
-        enhanced_message += "\n\nI'm escalating this to our senior support team for immediate attention."
-    
-    return {
-        "message": enhanced_message,
-        "original_message": base_message,
-        "enhancement_applied": True
-    }
 
 @app.get("/chat/session/{session_id}")
 def get_chat_session(session_id: str, req: Request):
@@ -646,3 +632,78 @@ def qa(request: QARequest, req: Request):
 def test_endpoint(req: Request):
     """Test endpoint to verify service is working"""
     return {"status": "ok", "service": "customer-chat-svc", "message": "Service is running"}
+
+@app.post("/chat/demo")
+def demo_natural_language_response(req: Request):
+    """Demo endpoint to show natural language response generation"""
+    try:
+        # Sample customer message
+        customer_message = "is my flight on time, what time should I reach to airport"
+        
+        # Sample session context
+        session_context = {
+            "customer_name": "John Doe",
+            "flight_no": "NZ278",
+            "date": "2025-01-17"
+        }
+        
+        # Sample sentiment response with new format
+        sentiment_response = {
+            "customer_message": customer_message,
+            "response_to_customer": "Hello! I understand you're concerned about timing for your flight. Let me check the current status and provide you with the most accurate information about when you should arrive at the airport.",
+            "analysis": {
+                "sentiment": "neutral",
+                "sentiment_score": 0.1,
+                "key_emotions_detected": ["concern", "curiosity"],
+                "urgency_level": "low",
+                "recommended_response_tone": "empathetic",
+                "key_concerns": ["timing", "airport arrival"]
+            }
+        }
+        
+        # Sample flight data
+        flight_data = {
+            "flight_no": "NZ278",
+            "status": "on time",
+            "scheduled_departure": "14:30",
+            "scheduled_arrival": "16:45",
+            "flight_type": "domestic"
+        }
+        
+        # Generate natural language response
+        natural_response = generate_natural_language_response(
+            customer_message=customer_message,
+            sentiment_response=sentiment_response,
+            flight_data=flight_data,
+            policy_data=None,
+            session_context=session_context
+        )
+        
+        # Show the difference between old JSON format and new natural language
+        old_json_response = {
+            "sentiment": "neutral",
+            "sentiment_score": 0.1,
+            "urgency_level": "low",
+            "recommended_tone": "professional",
+            "key_concerns": ["timing", "airport arrival"]
+        }
+        
+        return {
+            "customer_message": customer_message,
+            "llm_generated_response": sentiment_response.get("response_to_customer", ""),
+            "enhanced_final_response": natural_response,
+            "sentiment_analysis": sentiment_response.get("analysis", {}),
+            "old_json_response": old_json_response,
+            "improvement": "The service now uses LLM-generated empathetic responses as the base, enhanced with flight data and policy information",
+            "features": [
+                "LLM-generated empathetic responses",
+                "Enhanced with flight data",
+                "Policy document integration",
+                "Sentiment-aware communication",
+                "Contextual personalization"
+            ]
+        }
+        
+    except Exception as e:
+        service.log_error(e, "demo_natural_language_response")
+        raise HTTPException(status_code=500, detail="Failed to generate demo response")

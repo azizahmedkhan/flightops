@@ -298,7 +298,7 @@ The implementation provides a complete AI-powered flight operations management s
 
 ## 🚀 **Current `/query` Functionality**
 
-The `/query` endpoint is actually implemented as `/ask` in the agent service and provides a comprehensive flight disruption analysis system. Here's how it works:
+The `/query` endpoint is actually implemented as `/analyze-disruption` in the agent service and provides a comprehensive flight disruption analysis system. Here's how it works:
 
 ### **Architecture Flow of /query:**
 1. **Frontend** (`/ui/web/src/app/query/page.tsx`) - React form that collects:
@@ -415,7 +415,7 @@ For others: Standard rebooking. Total cost: $1,200."
 #### **2. Streaming Responses**
 ```python
 # Add streaming to agent service
-@app.post("/ask/stream")
+@app.post("/analyze-disruption/stream")
 async def ask_stream(body: Ask, request: Request):
     async def generate():
         # Stream flight lookup
