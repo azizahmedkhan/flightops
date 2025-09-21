@@ -1,0 +1,25 @@
+#! scalable-chatbot-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: scalable-chatbot-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: scalable-chatbot-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: scalable-chatbot-svc
+    ports:
+        - name: scalable-c-8088
+          port: 8088
+          protocol: TCP
+          targetPort: scalable-c-8088
+        - name: scalable-c-5678
+          port: 5678
+          protocol: TCP
+          targetPort: scalable-c-5678
+
+# check if there is at least one published port

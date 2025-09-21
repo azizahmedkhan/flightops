@@ -1,0 +1,21 @@
+#! ingest-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: ingest-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: ingest-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: ingest-svc
+    ports:
+        - name: ingest-svc-8084
+          port: 8084
+          protocol: TCP
+          targetPort: ingest-svc-8084
+
+# check if there is at least one published port

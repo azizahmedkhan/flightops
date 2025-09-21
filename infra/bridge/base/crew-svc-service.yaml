@@ -1,0 +1,21 @@
+#! crew-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: crew-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: crew-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: crew-svc
+    ports:
+        - name: crew-svc-8086
+          port: 8086
+          protocol: TCP
+          targetPort: crew-svc-8086
+
+# check if there is at least one published port

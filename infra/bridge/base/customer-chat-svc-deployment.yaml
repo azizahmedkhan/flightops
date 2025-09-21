@@ -1,0 +1,39 @@
+#! customer-chat-svc-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: customer-chat-svc
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: customer-chat-svc
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: customer-chat-svc
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: customer-chat-svc
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: customer-chat-svc
+                  image: infra-customer-chat-svc
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: AGENT_URL
+                      value: "${AGENT_URL}"
+                    - name: COMMS_URL
+                      value: "${COMMS_URL}"
+                    - name: RETRIEVAL_URL
+                      value: "${RETRIEVAL_URL}"
+                  ports:
+                    - name: customer-c-8087
+                      containerPort: 8087

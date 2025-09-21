@@ -30,15 +30,15 @@ const commsSchema = z.object({
 type CommsForm = z.infer<typeof commsSchema>
 
 interface CommsResponse {
-  context: {
-    flight_no: string
-    date: string
-    issue: string
-    impact_summary: string
-    options_summary: string
-    policy_citations: string[]
+  context?: {
+    flight_no?: string
+    date?: string
+    issue?: string
+    impact_summary?: string
+    options_summary?: string
+    policy_citations?: string[]
   }
-  draft: string
+  draft?: string
 }
 
 export default function CommsPage() {
@@ -72,10 +72,17 @@ export default function CommsPage() {
       })
 
       if (!res.ok) {
-        throw new Error('Failed to generate communication')
+        const errorData = await res.json()
+        throw new Error(errorData.detail || 'Failed to generate communication')
       }
 
       const result = await res.json()
+      
+      // Check if the response has the expected structure
+      if (!result.draft) {
+        throw new Error(result.detail || 'Invalid response from server')
+      }
+      
       setResponse(result)
       
       // Dispatch custom event if LLM message is present
@@ -94,8 +101,14 @@ export default function CommsPage() {
   }
 
   const handleFlightSelect = (suggestion: any) => {
+    if (!suggestion || typeof suggestion.flight_no !== 'string') {
+      return
+    }
+
     setValue('flight_no', suggestion.flight_no)
-    setValue('date', suggestion.flight_date)
+    if (suggestion.flight_date) {
+      setValue('date', suggestion.flight_date)
+    }
   }
 
   const watchedValues = watch()
@@ -266,73 +279,87 @@ export default function CommsPage() {
           <div className="space-y-6">
             {response && (
               <>
-                {/* Context Information */}
-                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
-                  <h3 className="text-xl font-bold text-black mb-4 flex items-center">
-                    <div className="bg-black p-2 rounded-lg mr-3">
-                      <Plane className="h-5 w-5 text-white" />
-                    </div>
-                    Flight Context
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 font-semibold">Flight:</span>
-                      <span className="font-bold text-black">{response.context.flight_no}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 font-semibold">Date:</span>
-                      <span className="font-bold text-black">{response.context.date}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600 font-semibold">Issue:</span>
-                      <span className="font-bold text-black">{response.context.issue}</span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600 font-semibold">Impact:</span>
-                      <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.impact_summary}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600 font-semibold">Options:</span>
-                      <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.options_summary}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Draft Communication */}
-                <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-bold text-black flex items-center">
+                {/* Context Information - only show if context exists */}
+                {response.context && (
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                    <h3 className="text-xl font-bold text-black mb-4 flex items-center">
                       <div className="bg-black p-2 rounded-lg mr-3">
-                        <MessageSquare className="h-5 w-5 text-white" />
+                        <Plane className="h-5 w-5 text-white" />
                       </div>
-                      Draft Communication
+                      Flight Context
                     </h3>
-                    <button
-                      onClick={() => copyToClipboard(response.draft)}
-                      className="flex items-center px-4 py-2 text-sm text-black hover:text-gray-600 border-2 border-gray-200 rounded-lg hover:bg-gray-100 font-semibold transition-colors"
-                    >
-                      {copied ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-1 text-black" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-1 text-black" />
-                          Copy
-                        </>
+                    <div className="space-y-3">
+                      {response.context.flight_no && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 font-semibold">Flight:</span>
+                          <span className="font-bold text-black">{response.context.flight_no}</span>
+                        </div>
                       )}
-                    </button>
+                      {response.context.date && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 font-semibold">Date:</span>
+                          <span className="font-bold text-black">{response.context.date}</span>
+                        </div>
+                      )}
+                      {response.context.issue && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600 font-semibold">Issue:</span>
+                          <span className="font-bold text-black">{response.context.issue}</span>
+                        </div>
+                      )}
+                      {response.context.impact_summary && (
+                        <div>
+                          <span className="text-sm text-gray-600 font-semibold">Impact:</span>
+                          <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.impact_summary}</p>
+                        </div>
+                      )}
+                      {response.context.options_summary && (
+                        <div>
+                          <span className="text-sm text-gray-600 font-semibold">Options:</span>
+                          <p className="text-sm text-gray-900 mt-1 font-medium">{response.context.options_summary}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-200">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-900 font-mono font-medium">
-                      {response.draft}
-                    </pre>
-                  </div>
-                </div>
+                )}
 
-                {/* Policy Citations */}
-                {response.context.policy_citations.length > 0 && (
+                {/* Draft Communication - only show if draft exists */}
+                {response.draft && (
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xl font-bold text-black flex items-center">
+                        <div className="bg-black p-2 rounded-lg mr-3">
+                          <MessageSquare className="h-5 w-5 text-white" />
+                        </div>
+                        Draft Communication
+                      </h3>
+                      <button
+                        onClick={() => copyToClipboard(response.draft || '')}
+                        className="flex items-center px-4 py-2 text-sm text-black hover:text-gray-600 border-2 border-gray-200 rounded-lg hover:bg-gray-100 font-semibold transition-colors"
+                      >
+                        {copied ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-1 text-black" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4 mr-1 text-black" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="bg-gray-100 rounded-lg p-4 border-2 border-gray-200">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-900 font-mono font-medium">
+                        {response.draft}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Policy Citations - only show if citations exist */}
+                {response.context?.policy_citations && response.context.policy_citations.length > 0 && (
                   <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
                     <h3 className="text-xl font-bold text-black mb-4 flex items-center">
                       <div className="bg-black p-2 rounded-lg mr-3">
@@ -358,6 +385,16 @@ export default function CommsPage() {
                   <MessageSquare className="h-8 w-8 text-white" />
                 </div>
                 <p className="text-gray-600 font-semibold">Generate a communication draft to see results here</p>
+              </div>
+            )}
+
+            {response && !response.draft && !response.context && (
+              <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-12 border-2 border-gray-200 text-center">
+                <div className="bg-yellow-500 p-4 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                  <AlertCircle className="h-8 w-8 text-white" />
+                </div>
+                <p className="text-gray-600 font-semibold">No communication data available in response</p>
+                <p className="text-sm text-gray-500 mt-2">Please try again or check the server logs</p>
               </div>
             )}
           </div>

@@ -1,0 +1,31 @@
+#! stack-ready-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: stack-ready
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: stack-ready
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: stack-ready
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: stack-ready
+                com.docker.compose.network.default: "true"
+        spec:
+            restartPolicy: Never
+            containers:
+                - name: stack-ready
+                  image: alpine:3.19
+                  imagePullPolicy: IfNotPresent
+                  command: ['/bin/sh -c echo ''FlightOps stack is ready — visit http://localhost:3000''']

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from psycopg.errors import UndefinedTable
 from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
 
 from base_service import BaseService
 from llm_tracker import LLMTracker
@@ -296,6 +296,13 @@ async def ask(payload: dict, request: Request):
 @app.post("/test_llm")
 async def test_llm(request: Request):
     try:
+        import time
+        timestamp = time.time()
+        print(f"DEBUG: test_llm endpoint called in gateway with request: {request} at {timestamp}...")
+        print(f"DEBUG: Request headers: {dict(request.headers)}")
+        print(f"DEBUG: Request method: {request.method}")
+        print(f"DEBUG: Request URL: {request.url}")
+
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{AGENT_URL}/test_llm", timeout=60.0)
             result = r.json()
@@ -316,9 +323,13 @@ async def test_llm(request: Request):
 @app.post("/draft_comms")
 async def draft_comms(payload: dict, request: Request):
     try:
+        print(f"DEBUG: Gateway received draft_comms request: {payload}")
+        print(f"DEBUG: AGENT_URL: {AGENT_URL}")
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{AGENT_URL}/draft_comms", json=payload, timeout=60.0)
+            print(f"DEBUG: Agent service response status: {r.status_code}")
             result = r.json()
+            print(f"DEBUG: Agent service response: {result}")
             
             # Track LLM message if present in response
             if 'llm_message' in result:
@@ -330,6 +341,7 @@ async def draft_comms(payload: dict, request: Request):
             service.log_request(request, {"status": "success"})
             return result
     except Exception as e:
+        print(f"DEBUG: Gateway error: {e}")
         service.log_error(e, "draft_comms endpoint")
         raise
 

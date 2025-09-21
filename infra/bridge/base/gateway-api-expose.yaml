@@ -1,0 +1,18 @@
+#! gateway-api-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: gateway-api
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: gateway-api
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: gateway-api
+    ports:
+        - name: gateway-ap-8080
+          port: 8080
+          targetPort: gateway-ap-8080

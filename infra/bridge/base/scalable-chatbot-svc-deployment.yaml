@@ -1,0 +1,56 @@
+#! scalable-chatbot-svc-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: scalable-chatbot-svc
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: scalable-chatbot-svc
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: scalable-chatbot-svc
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: scalable-chatbot-svc
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: scalable-chatbot-svc
+                  image: infra-scalable-chatbot-svc
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: AGENT_URL
+                      value: "${AGENT_URL}"
+                    - name: CHAT_MODEL
+                      value: "${CHAT_MODEL}"
+                    - name: COMMS_URL
+                      value: "${COMMS_URL}"
+                    - name: DEBUGPY
+                      value: "${DEBUGPY}"
+                    - name: OPENAI_API_KEY
+                      value: "${OPENAI_API_KEY}"
+                    - name: REDIS_URL
+                      value: "${REDIS_URL}"
+                    - name: RETRIEVAL_URL
+                      value: "${RETRIEVAL_URL}"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://localhost:8088/health']
+                    periodSeconds: 30
+                    initialDelaySeconds: 40
+                    timeoutSeconds: 10
+                    failureThreshold: 3
+                  ports:
+                    - name: scalable-c-8088
+                      containerPort: 8088
+                    - name: scalable-c-5678
+                      containerPort: 5678

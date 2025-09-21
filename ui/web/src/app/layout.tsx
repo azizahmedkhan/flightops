@@ -23,6 +23,7 @@ export default function RootLayout({
     { href: '/data', label: 'Data Insights' },
     { href: '/monitoring', label: 'Monitoring' },
     { href: '/customer-chat', label: 'Customer Chat' },
+    { href: '/chatbot', label: 'Scalable Chat' },
     { href: '/comms', label: 'Communications' },
     { href: '/query', label: 'Agent Query' },
     { href: '/llm-audit', label: 'LLM Audit' },

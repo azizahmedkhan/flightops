@@ -1,0 +1,21 @@
+#! customer-chat-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: customer-chat-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: customer-chat-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: customer-chat-svc
+    ports:
+        - name: customer-c-8087
+          port: 8087
+          protocol: TCP
+          targetPort: customer-c-8087
+
+# check if there is at least one published port

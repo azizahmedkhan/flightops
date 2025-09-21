@@ -21,6 +21,12 @@ import uvicorn
 from shared.base_service import BaseService
 from shared.llm_client import LLMClient
 from shared.prompt_manager import PromptManager
+import os
+import debugpy
+
+if os.environ.get("DEBUGPY"):
+    debugpy.listen(("0.0.0.0", 5678))
+    print("🐛 Debugpy is listening on port 5678")
 
 
 # Global variables for connection management
@@ -573,6 +579,10 @@ def test_endpoint(req: Request):
 
 
 if __name__ == "__main__":
+    if os.environ.get("DEBUGPY"):
+        print("⏳ Waiting for debugger to attach...")
+        debugpy.wait_for_client()
+        print("✅ Debugger attached!")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

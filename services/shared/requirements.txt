@@ -1,0 +1,4 @@
+# Shared module dependencies
+openai==1.40.3
+tiktoken==0.7.0
+loguru==0.7.2

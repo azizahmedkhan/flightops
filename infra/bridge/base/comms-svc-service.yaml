@@ -1,0 +1,21 @@
+#! comms-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: comms-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: comms-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: comms-svc
+    ports:
+        - name: comms-svc-8083
+          port: 8083
+          protocol: TCP
+          targetPort: comms-svc-8083
+
+# check if there is at least one published port

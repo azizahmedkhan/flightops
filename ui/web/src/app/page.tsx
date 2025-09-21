@@ -7,7 +7,8 @@ import {
   Activity,
   ArrowRight,
   Zap,
-  Users
+  Users,
+  Bot
 } from 'lucide-react'
 import LLMTestComponent from './components/LLMTestComponent'
 
@@ -68,6 +69,13 @@ export default function HomePage() {
       icon: MessageSquare,
       href: '/customer-chat',
       color: 'bg-black'
+    },
+    {
+      title: 'Scalable Chatbot',
+      description: 'High-performance chatbot supporting 1000+ concurrent sessions',
+      icon: Bot,
+      href: '/chatbot',
+      color: 'bg-purple-600'
     }
   ]
 

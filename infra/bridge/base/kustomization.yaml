@@ -1,0 +1,45 @@
+#! kustomization.yaml
+# Generated code, do not edit
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - 0-infra-namespace.yaml
+    - agent-svc-deployment.yaml
+    - agent-svc-expose.yaml
+    - agent-svc-service.yaml
+    - comms-svc-deployment.yaml
+    - comms-svc-expose.yaml
+    - comms-svc-service.yaml
+    - crew-svc-deployment.yaml
+    - crew-svc-expose.yaml
+    - crew-svc-service.yaml
+    - customer-chat-svc-deployment.yaml
+    - customer-chat-svc-expose.yaml
+    - customer-chat-svc-service.yaml
+    - db-dbdata-persistentVolumeClaim.yaml
+    - db-deployment.yaml
+    - db-expose.yaml
+    - db-service.yaml
+    - default-network-policy.yaml
+    - gateway-api-deployment.yaml
+    - gateway-api-expose.yaml
+    - gateway-api-service.yaml
+    - ingest-svc-deployment.yaml
+    - ingest-svc-expose.yaml
+    - ingest-svc-service.yaml
+    - predictive-svc-deployment.yaml
+    - predictive-svc-expose.yaml
+    - predictive-svc-service.yaml
+    - redis-deployment.yaml
+    - redis-expose.yaml
+    - redis-service.yaml
+    - retrieval-svc-deployment.yaml
+    - retrieval-svc-expose.yaml
+    - retrieval-svc-service.yaml
+    - scalable-chatbot-svc-deployment.yaml
+    - scalable-chatbot-svc-expose.yaml
+    - scalable-chatbot-svc-service.yaml
+    - stack-ready-deployment.yaml
+    - web-deployment.yaml
+    - web-expose.yaml
+    - web-service.yaml

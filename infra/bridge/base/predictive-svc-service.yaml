@@ -1,0 +1,21 @@
+#! predictive-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: predictive-svc-published
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: predictive-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: predictive-svc
+    ports:
+        - name: predictive-8085
+          port: 8085
+          protocol: TCP
+          targetPort: predictive-8085
+
+# check if there is at least one published port

@@ -1,0 +1,47 @@
+#! crew-svc-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: crew-svc
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: crew-svc
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: crew-svc
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: crew-svc
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: crew-svc
+                  image: infra-crew-svc
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: CHAT_MODEL
+                      value: "${CHAT_MODEL}"
+                    - name: DB_HOST
+                      value: "${DB_HOST}"
+                    - name: DB_NAME
+                      value: "${DB_NAME}"
+                    - name: DB_PASS
+                      value: "${DB_PASS}"
+                    - name: DB_PORT
+                      value: "${DB_PORT}"
+                    - name: DB_USER
+                      value: "${DB_USER}"
+                    - name: OPENAI_API_KEY
+                      value: "${OPENAI_API_KEY}"
+                  ports:
+                    - name: crew-svc-8086
+                      containerPort: 8086

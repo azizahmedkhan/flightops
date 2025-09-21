@@ -1,0 +1,37 @@
+#! comms-svc-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: comms-svc
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: comms-svc
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: comms-svc
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: comms-svc
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: comms-svc
+                  image: infra-comms-svc
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: CHAT_MODEL
+                      value: "${CHAT_MODEL}"
+                    - name: OPENAI_API_KEY
+                      value: "${OPENAI_API_KEY}"
+                  ports:
+                    - name: comms-svc-8083
+                      containerPort: 8083

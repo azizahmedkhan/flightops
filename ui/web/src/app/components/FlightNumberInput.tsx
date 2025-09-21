@@ -87,7 +87,17 @@ export default function FlightNumberInput({
         
         if (response.ok) {
           const data = await response.json()
-          setSuggestions(data.suggestions || [])
+          const flightSuggestions = Array.isArray(data.suggestions)
+            ? data.suggestions.filter((item: FlightSuggestion | null | undefined): item is FlightSuggestion => {
+                if (!item) {
+                  return false
+                }
+
+                return typeof item.flight_no === 'string'
+              })
+            : []
+
+          setSuggestions(flightSuggestions)
         } else {
           setSuggestions([])
         }
@@ -115,7 +125,11 @@ export default function FlightNumberInput({
   }
 
   // Handle suggestion selection
-  const handleSuggestionSelect = (suggestion: FlightSuggestion) => {
+  const handleSuggestionSelect = (suggestion?: FlightSuggestion) => {
+    if (!suggestion || !suggestion.flight_no) {
+      return
+    }
+
     onChange(suggestion.flight_no)
     if (onSelect) {
       onSelect(suggestion)
@@ -226,6 +240,10 @@ export default function FlightNumberInput({
           ) : (
             <div className="py-2">
               {suggestions.map((suggestion, index) => {
+                if (!suggestion) {
+                  return null
+                }
+
                 const StatusIcon = statusIcons[suggestion.status as keyof typeof statusIcons] || Clock
                 const statusColor = statusColors[suggestion.status as keyof typeof statusColors] || 'text-gray-600'
                 

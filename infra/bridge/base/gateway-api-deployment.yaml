@@ -1,0 +1,61 @@
+#! gateway-api-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: gateway-api
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: gateway-api
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: infra
+            com.docker.compose.service: gateway-api
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: infra
+                com.docker.compose.service: gateway-api
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: gateway-api
+                  image: infra-gateway-api
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: AGENT_URL
+                      value: "${AGENT_URL}"
+                    - name: COMMS_URL
+                      value: "${COMMS_URL}"
+                    - name: CREW_URL
+                      value: "${CREW_URL}"
+                    - name: CUSTOMER_CHAT_URL
+                      value: "${CUSTOMER_CHAT_URL}"
+                    - name: DB_HOST
+                      value: "${DB_HOST}"
+                    - name: DB_NAME
+                      value: "${DB_NAME}"
+                    - name: DB_PASS
+                      value: "${DB_PASS}"
+                    - name: DB_PORT
+                      value: "${DB_PORT}"
+                    - name: DB_USER
+                      value: "${DB_USER}"
+                    - name: EMBEDDINGS_MODEL
+                      value: "${EMBEDDINGS_MODEL}"
+                    - name: INGEST_URL
+                      value: "${INGEST_URL}"
+                    - name: OPENAI_API_KEY
+                      value: "${OPENAI_API_KEY}"
+                    - name: PREDICTIVE_URL
+                      value: "${PREDICTIVE_URL}"
+                    - name: RETRIEVAL_URL
+                      value: "${RETRIEVAL_URL}"
+                  ports:
+                    - name: gateway-ap-8080
+                      containerPort: 8080

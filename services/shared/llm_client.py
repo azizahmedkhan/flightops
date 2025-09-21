@@ -74,7 +74,7 @@ class LLMClient:
                 prompt = message.get("content", "")
                 break
 
-        print(f"DEBUG: LLM message: {messages}")
+        print(f"DEBUG: LLM message in client: {messages}")
 
         
         try:

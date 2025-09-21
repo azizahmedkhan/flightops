@@ -1,0 +1,18 @@
+#! customer-chat-svc-expose.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: customer-chat-svc
+    namespace: infra
+    labels:
+        com.docker.compose.project: infra
+        com.docker.compose.service: customer-chat-svc
+spec:
+    selector:
+        com.docker.compose.project: infra
+        com.docker.compose.service: customer-chat-svc
+    ports:
+        - name: customer-c-8087
+          port: 8087
+          targetPort: customer-c-8087

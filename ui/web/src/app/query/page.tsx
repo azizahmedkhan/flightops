@@ -291,22 +291,22 @@ export default function QueryPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-gray-600 font-semibold">Flight</p>
-                      <p className="font-bold text-black">{response.tools_payload.flight.flight_no}</p>
+                      <p className="font-bold text-black">{response.tools_payload?.flight?.flight_no}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 font-semibold">Status</p>
-                      <p className="font-bold text-black">{response.tools_payload.flight.status}</p>
+                      <p className="font-bold text-black">{response.tools_payload?.flight?.status}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 font-semibold">Route</p>
                       <p className="font-bold text-black">
-                        {response.tools_payload.flight.origin} → {response.tools_payload.flight.destination}
+                        {response.tools_payload?.flight?.origin} → {response.tools_payload?.flight?.destination}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 font-semibold">Schedule</p>
                       <p className="font-bold text-black">
-                        {response.tools_payload.flight.sched_dep} - {response.tools_payload.flight.sched_arr}
+                        {response.tools_payload?.flight?.sched_dep} - {response.tools_payload?.flight?.sched_arr}
                       </p>
                     </div>
                   </div>
@@ -323,18 +323,18 @@ export default function QueryPage() {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="text-center p-4 bg-gray-100 rounded-lg border-2 border-gray-200">
                       <p className="text-2xl font-bold text-black">
-                        {response.tools_payload.impact.passengers}
+                        {response.tools_payload?.impact?.passengers}
                       </p>
                       <p className="text-sm text-gray-600 font-semibold">Passengers</p>
                     </div>
                     <div className="text-center p-4 bg-gray-100 rounded-lg border-2 border-gray-200">
                       <p className="text-2xl font-bold text-black">
-                        {response.tools_payload.impact.crew}
+                        {response.tools_payload?.impact?.crew}
                       </p>
                       <p className="text-sm text-gray-600 font-semibold">Crew Members</p>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-800 font-medium">{response.tools_payload.impact.summary}</p>
+                  <p className="text-sm text-gray-800 font-medium">{response.tools_payload?.impact?.summary}</p>
                 </div>
 
                 {/* Rebooking Options */}
@@ -346,7 +346,7 @@ export default function QueryPage() {
                     Rebooking Options
                   </h3>
                   <div className="space-y-3">
-                    {response.tools_payload.options.map((option, index) => (
+                    {response.tools_payload?.options?.map((option, index) => (
                       <div key={index} className="p-4 border-2 border-gray-200 rounded-lg bg-gray-50">
                         <div className="flex justify-between items-start mb-2">
                           <p className="font-bold text-black">{option.plan}</p>
@@ -366,7 +366,7 @@ export default function QueryPage() {
                 </div>
 
                 {/* Policy Citations */}
-                {response.answer.citations.length > 0 && (
+                {response.answer?.citations?.length > 0 && (
                   <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg p-6 border-2 border-gray-200">
                     <h3 className="text-xl font-bold text-black mb-4 flex items-center">
                       <div className="bg-black p-2 rounded-lg mr-3">
@@ -375,7 +375,7 @@ export default function QueryPage() {
                       Policy Citations
                     </h3>
                     <div className="space-y-2">
-                      {response.answer.citations.map((citation, index) => (
+                      {response.answer?.citations?.map((citation, index) => (
                         <div key={index} className="p-3 bg-gray-100 rounded-lg border-2 border-gray-200">
                           <p className="text-sm text-gray-800 font-medium">{citation}</p>
                         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Bot, TestTube } from 'lucide-react'
 
 interface LLMTestComponentProps {
@@ -10,8 +10,27 @@ interface LLMTestComponentProps {
 export default function LLMTestComponent({ className = '' }: LLMTestComponentProps) {
   const [testing, setTesting] = useState(false)
   const [testingMessages, setTestingMessages] = useState(false)
+  const [lastCallTime, setLastCallTime] = useState<number>(0)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const isExecutingRef = useRef(false)
 
   const testLLMCall = async () => {
+    // Prevent duplicate calls within 2 seconds (React StrictMode protection)
+    const now = Date.now()
+    if (now - lastCallTime < 2000) {
+      console.log('Preventing duplicate LLM call due to React StrictMode')
+      return
+    }
+    
+    // Additional protection against concurrent calls
+    if (isProcessing || isExecutingRef.current) {
+      console.log('Preventing concurrent LLM call')
+      return
+    }
+    
+    setLastCallTime(now)
+    setIsProcessing(true)
+    isExecutingRef.current = true
     setTesting(true)
     try {
       console.log('Testing LLM call...')
@@ -52,10 +71,28 @@ export default function LLMTestComponent({ className = '' }: LLMTestComponentPro
       console.error('LLM Test Error:', error)
     } finally {
       setTesting(false)
+      setIsProcessing(false)
+      isExecutingRef.current = false
     }
   }
 
   const testMessagesEndpoint = async () => {
+    // Prevent duplicate calls within 2 seconds (React StrictMode protection)
+    const now = Date.now()
+    if (now - lastCallTime < 2000) {
+      console.log('Preventing duplicate messages call due to React StrictMode')
+      return
+    }
+    
+    // Additional protection against concurrent calls
+    if (isProcessing || isExecutingRef.current) {
+      console.log('Preventing concurrent messages call')
+      return
+    }
+    
+    setLastCallTime(now)
+    setIsProcessing(true)
+    isExecutingRef.current = true
     setTestingMessages(true)
     try {
       console.log('Testing LLM messages endpoint...')
@@ -75,6 +112,8 @@ export default function LLMTestComponent({ className = '' }: LLMTestComponentPro
       console.error('Messages endpoint test error:', error)
     } finally {
       setTestingMessages(false)
+      setIsProcessing(false)
+      isExecutingRef.current = false
     }
   }
 

@@ -1,0 +1,11 @@
+#! comms-svc-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: comms-svc-published
+    namespace: infra
+spec:
+    type: LoadBalancer
+
+# check if there is at least one published port

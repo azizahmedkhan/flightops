@@ -1,0 +1,216 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flightops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    restart: unless-stopped
+
+  retrieval-svc:
+    build:
+      context: ..
+      dockerfile: services/retrieval-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8081:8081"]
+    restart: unless-stopped
+
+  comms-svc:
+    build:
+      context: ..
+      dockerfile: services/comms-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL}
+    ports: ["8083:8083"]
+    restart: unless-stopped
+
+  agent-svc:
+    build:
+      context: ..
+      dockerfile: services/agent-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - RETRIEVAL_URL=${RETRIEVAL_URL}
+      - COMMS_URL=${COMMS_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL}
+      - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS}
+    depends_on:
+      db:
+        condition: service_healthy
+      retrieval-svc:
+        condition: service_started
+    ports: ["8082:8082"]
+    restart: unless-stopped
+
+  ingest-svc:
+    build:
+      context: ..
+      dockerfile: services/ingest-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8084:8084"]
+    restart: unless-stopped
+
+  customer-chat-svc:
+    build:
+      context: ..
+      dockerfile: services/customer-chat-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8085:8085"]
+    restart: unless-stopped
+
+  predictive-svc:
+    build:
+      context: ..
+      dockerfile: services/predictive-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8086:8086"]
+    restart: unless-stopped
+
+  crew-svc:
+    build:
+      context: ..
+      dockerfile: services/crew-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8087:8087"]
+    restart: unless-stopped
+
+  scalable-chatbot-svc:
+    build:
+      context: ..
+      dockerfile: services/scalable-chatbot-svc/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8088:8088"]
+    restart: unless-stopped
+
+  gateway-api:
+    build:
+      context: ..
+      dockerfile: services/gateway-api/Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - AGENT_URL=${AGENT_URL}
+      - RETRIEVAL_URL=${RETRIEVAL_URL}
+      - COMMS_URL=${COMMS_URL}
+      - INGEST_URL=${INGEST_URL}
+      - CUSTOMER_CHAT_URL=${CUSTOMER_CHAT_URL}
+      - PREDICTIVE_URL=${PREDICTIVE_URL}
+      - CREW_URL=${CREW_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
+    depends_on:
+      - db
+      - agent-svc
+      - retrieval-svc
+      - comms-svc
+      - ingest-svc
+      - customer-chat-svc
+      - predictive-svc
+      - crew-svc
+      - scalable-chatbot-svc
+    ports: ["8080:8080"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../ui/web
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - NEXT_PUBLIC_GATEWAY_URL=${NEXT_PUBLIC_GATEWAY_URL}
+    depends_on:
+      - gateway-api
+    ports: ["3000:3000"]
+    restart: unless-stopped
+
+volumes:
+  dbdata:
