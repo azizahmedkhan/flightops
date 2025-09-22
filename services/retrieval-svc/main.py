@@ -106,8 +106,8 @@ def get_bm25_scores(query: str, documents: List[Dict[str, Any]]) -> List[Tuple[i
     # Return (doc_id, score) pairs
     return [(doc['doc_id'], float(score)) for doc, score in zip(documents, scores)]
 
-def get_vector_scores(query: str, k: int) -> List[Tuple[int, float]]:
-    """Get vector similarity scores using pgvector."""
+def get_vector_scores(query: str, k: int, category: str = None) -> List[Tuple[int, float]]:
+    """Get vector similarity scores using pgvector with optional category filtering."""
     try:
         vec = embed(query)
         
@@ -128,19 +128,33 @@ def get_vector_scores(query: str, k: int) -> List[Tuple[int, float]]:
                     service.log_error(e, "pgvector extension not available")
                     return []
                 
-                # Get vector similarity scores
-                cur.execute("""
-                    SELECT d.id, 
-                           CASE 
-                               WHEN de.embedding <#> t.q IS NOT NULL 
-                               THEN 1 - (de.embedding <#> t.q)
-                               ELSE 0.0
-                           END AS score
-                    FROM doc_embeddings de, docs d, tmp_query t
-                    WHERE d.id = de.doc_id
-                    ORDER BY de.embedding <-> t.q
-                    LIMIT %s
-                """, (k,))
+                # Build query with optional category filtering
+                if category:
+                    cur.execute("""
+                        SELECT d.id, 
+                               CASE 
+                                   WHEN de.embedding <#> t.q IS NOT NULL 
+                                   THEN 1 - (de.embedding <#> t.q)
+                                   ELSE 0.0
+                               END AS score
+                        FROM doc_embeddings de, docs d, tmp_query t
+                        WHERE d.id = de.doc_id AND d.meta->>'category' = %s
+                        ORDER BY de.embedding <-> t.q
+                        LIMIT %s
+                    """, (category, k))
+                else:
+                    cur.execute("""
+                        SELECT d.id, 
+                               CASE 
+                                   WHEN de.embedding <#> t.q IS NOT NULL 
+                                   THEN 1 - (de.embedding <#> t.q)
+                                   ELSE 0.0
+                               END AS score
+                        FROM doc_embeddings de, docs d, tmp_query t
+                        WHERE d.id = de.doc_id
+                        ORDER BY de.embedding <-> t.q
+                        LIMIT %s
+                    """, (k,))
                 
                 results = []
                 for row in cur.fetchall():
@@ -157,12 +171,16 @@ def get_vector_scores(query: str, k: int) -> List[Tuple[int, float]]:
         service.log_error(e, "vector_scores")
         return []
 
-def hybrid_search(query: str, k: int = 5) -> List[Dict[str, Any]]:
-    """Perform hybrid search combining BM25 and vector search."""
+def hybrid_search(query: str, k: int = 5, category: str = None) -> List[Dict[str, Any]]:
+    """Perform hybrid search combining BM25 and vector search with optional category filtering."""
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
-            # Get all documents for BM25
-            cur.execute("SELECT id, title, content, meta FROM docs")
+            # Build query with optional category filtering
+            if category:
+                cur.execute("SELECT id, title, content, meta FROM docs WHERE meta->>'category' = %s", (category,))
+            else:
+                cur.execute("SELECT id, title, content, meta FROM docs")
+            
             docs = []
             for row in cur.fetchall():
                 docs.append({
@@ -178,8 +196,8 @@ def hybrid_search(query: str, k: int = 5) -> List[Dict[str, Any]]:
             # Get BM25 scores
             bm25_scores = get_bm25_scores(query, docs)
             
-            # Get vector scores
-            vector_scores = get_vector_scores(query, k * 2)  # Get more for better merging
+            # Get vector scores with category filtering
+            vector_scores = get_vector_scores(query, k * 2, category)  # Get more for better merging
             
             # Normalize scores (simple min-max normalization)
             def normalize_scores(scores):
@@ -218,7 +236,10 @@ def hybrid_search(query: str, k: int = 5) -> List[Dict[str, Any]]:
                     'title': doc['title'],
                     'snippet': doc['content'][:300] + '...' if len(doc['content']) > 300 else doc['content'],
                     'score': score,
-                    'source': doc['meta'].get('source', 'unknown')
+                    'source': doc['meta'].get('source', 'unknown'),
+                    'category': doc['meta'].get('category', 'unknown'),
+                    'chunk_index': doc['meta'].get('chunk_index'),
+                    'total_chunks': doc['meta'].get('total_chunks')
                 })
             
             return results
@@ -257,4 +278,120 @@ def search(q: Query, request: Request):
             
         except Exception as e:
             service.log_error(e, "search endpoint")
+            raise
+
+@app.post("/kb/search")
+def kb_search(q: Query, request: Request):
+    """Knowledge base search endpoint - searches all documents."""
+    with LATENCY.labels("retrieval-svc","/kb/search","POST").time():
+        try:
+            # Perform hybrid search across all documents
+            results = hybrid_search(q.q, q.k)
+            
+            # Get counts by category
+            with db_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM doc_embeddings")
+                    embeddings_count = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM docs")
+                    docs_count = cur.fetchone()[0]
+                    cur.execute("SELECT meta->>'category' as category, COUNT(*) FROM docs GROUP BY meta->>'category'")
+                    category_counts = {row[0] or 'unknown': row[1] for row in cur.fetchall()}
+            
+            if embeddings_count > 0:
+                mode = "hybrid"
+            elif docs_count > 0:
+                mode = "bm25_only"
+            else:
+                mode = "no_data"
+            
+            result = {
+                "mode": mode,
+                "results": results,
+                "embeddings_available": embeddings_count > 0,
+                "category_counts": category_counts,
+                "total_documents": docs_count
+            }
+            
+            service.log_request(request, {"status": "success", "mode": mode, "result_count": len(results)})
+            return result
+            
+        except Exception as e:
+            service.log_error(e, "kb_search endpoint")
+            raise
+
+@app.post("/kb/search/customer")
+def kb_search_customer(q: Query, request: Request):
+    """Knowledge base search endpoint - searches only customer-facing documents (01-12)."""
+    with LATENCY.labels("retrieval-svc","/kb/search/customer","POST").time():
+        try:
+            # Perform hybrid search on customer-facing documents only
+            results = hybrid_search(q.q, q.k, category="customer")
+            
+            # Get counts for customer documents
+            with db_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM doc_embeddings de, docs d WHERE d.id = de.doc_id AND d.meta->>'category' = 'customer'")
+                    embeddings_count = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM docs WHERE meta->>'category' = 'customer'")
+                    docs_count = cur.fetchone()[0]
+            
+            if embeddings_count > 0:
+                mode = "hybrid"
+            elif docs_count > 0:
+                mode = "bm25_only"
+            else:
+                mode = "no_data"
+            
+            result = {
+                "mode": mode,
+                "results": results,
+                "embeddings_available": embeddings_count > 0,
+                "category": "customer",
+                "total_documents": docs_count
+            }
+            
+            service.log_request(request, {"status": "success", "mode": mode, "result_count": len(results)})
+            return result
+            
+        except Exception as e:
+            service.log_error(e, "kb_search_customer endpoint")
+            raise
+
+@app.post("/kb/search/operational")
+def kb_search_operational(q: Query, request: Request):
+    """Knowledge base search endpoint - searches only operational documents (13-17)."""
+    with LATENCY.labels("retrieval-svc","/kb/search/operational","POST").time():
+        try:
+            # Perform hybrid search on operational documents only
+            results = hybrid_search(q.q, q.k, category="operational")
+            
+            # Get counts for operational documents
+            with db_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM doc_embeddings de, docs d WHERE d.id = de.doc_id AND d.meta->>'category' = 'operational'")
+                    embeddings_count = cur.fetchone()[0]
+                    cur.execute("SELECT COUNT(*) FROM docs WHERE meta->>'category' = 'operational'")
+                    docs_count = cur.fetchone()[0]
+            
+            if embeddings_count > 0:
+                mode = "hybrid"
+            elif docs_count > 0:
+                mode = "bm25_only"
+            else:
+                mode = "no_data"
+            
+            result = {
+                "mode": mode,
+                "results": results,
+                "embeddings_available": embeddings_count > 0,
+                "category": "operational",
+                "total_documents": docs_count
+            }
+            
+            service.log_request(request, {"status": "success", "mode": mode, "result_count": len(results)})
+            return result
+            
+        except Exception as e:
+            service.log_error(e, "kb_search_operational endpoint")
             raise

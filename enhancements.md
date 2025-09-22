@@ -75,6 +75,25 @@ Enhance your existing retrieval-svc to support knowledge base search alongside y
 5. The service should handle both your existing operational documents and the new customer-facing policies.
 ```
 
+
+**Prompt 2: Add Knowledge Base Search to Existing Retrieval Service**
+```
+Enhance the existing services/retrieval-svc/main.py to support knowledge base search:
+
+1. Add new endpoints:
+   - POST /kb/search - search all documents
+   - POST /kb/search/customer - search only customer-facing docs (01-12)
+   - POST /kb/search/operational - search only operational docs (13-17)
+
+2. Add document category filtering based on the numbering system
+3. Keep all existing functionality intact
+4. Use the existing database connection and embedding logic
+```
+
+
+
+
+
 ### **Phase 4: Create Knowledge Base Ingestion Service**
 
 **Prompt 4: Create KB Ingestion Service for /data/docs**
@@ -211,3 +230,109 @@ curl -X POST http://localhost:8088/chat/message -d '{"session_id": "SESSION_ID",
 This approach leverages your existing infrastructure while adding the scalable-chat functionality. Your existing operational documents remain untouched, and the new customer-facing policies complement them perfectly.
 
 Would you like me to start with any specific phase, or would you prefer to see the detailed implementation for a particular component first?
+
+
+
+
+You're absolutely right! If you already have a `policies` table for docs and an `Embedding` vector table, and you have an existing data ingestion tool, then we don't need migration files. Let me check your existing database structure and ingestion setup.
+
+
+[2 tools called]
+
+Perfect! Now I understand your existing setup. You already have:
+
+1. **Database tables**: `docs` and `doc_embeddings` (with pgvector)
+2. **Existing ingestion service**: `ingest-svc` that processes both CSV and markdown files
+3. **Gateway API**: Already has policy CRUD endpoints
+
+You're absolutely right - we don't need migration files! Let me revise the implementation plan to work with your existing infrastructure.
+
+## Revised Implementation Plan - Using Existing Infrastructure
+
+### **Phase 1: Enhance Existing Ingestion Service**
+
+**Prompt 1: Enhance Existing Ingest Service for Knowledge Base**
+```
+Modify the existing services/ingest-svc/main.py to support the scalable-chat knowledge base:
+
+1. Update the parse_markdown_files() function to:
+   - Add document categorization based on your numbering system (01-12 = customer, 13-17 = operational)
+   - Add YAML frontmatter parsing for metadata
+   - Implement chunking logic (300-500 tokens with 10-15% overlap)
+   - Add document category to the meta JSONB field
+
+2. Add new endpoint POST /ingest/kb-only to ingest only the knowledge base documents (01-12)
+
+3. Keep all existing functionality intact - just enhance the markdown processing
+```
+
+
+
+### **Phase 3: Enhance Scalable Chatbot with KB Integration**
+
+**Prompt 3: Integrate Knowledge Base with Existing Scalable Chatbot**
+```
+Enhance the existing services/scalable-chatbot-svc to integrate with the knowledge base:
+
+1. Add new functions to services/scalable-chatbot-svc/utils.py:
+   - `fetch_kb_context(query: str)` - search knowledge base via retrieval-svc
+   - `route_query(message: str)` - determine if query needs KB or flight status
+   - `format_kb_response(chunks, sources)` - format KB responses with citations
+
+2. Modify the main chat processing logic to:
+   - Route queries between flight status and KB search
+   - Include KB context in LLM prompts
+   - Add source citations to responses
+   - Implement the strict system prompt you specified
+
+3. Add new environment variables for KB service URLs
+4. Update WebSocket response format to include source citations
+```
+
+### **Phase 4: System Prompt and Response Engineering**
+
+**Prompt 4: Implement Air New Zealand System Prompt and Response Formatting**
+```
+Update the scalable-chatbot-svc with enterprise-ready system prompt and response formatting:
+
+1. Create a new system prompt that:
+   - Restricts responses to provided context only
+   - Requires source citations for all claims
+   - Provides safe fallbacks for unknown queries
+   - Maintains high-level, non-committal language
+
+2. Implement response formatting that:
+   - Starts with 2-4 bullet points
+   - Includes "Heads up" for exceptions
+   - Adds [source] footnotes for each claim
+   - Uses "I can't confirm from current info" for uncertainty
+
+3. Add query routing logic:
+   - Flight status queries → flight_status tool
+   - Policy questions → kb_search
+   - Unknown queries → safe fallback
+```
+
+## Key Advantages of This Approach
+
+1. **No migration files needed** - uses existing tables
+2. **Leverages existing ingestion** - just enhances the markdown processing
+3. **Uses existing database schema** - `docs` and `doc_embeddings` tables
+4. **Builds on existing services** - enhances rather than replaces
+5. **Maintains existing functionality** - all current features remain intact
+
+## Quick Start Commands (Revised)
+
+```bash
+# Phase 1: Ingest knowledge base documents
+curl -X POST http://localhost:8084/ingest/kb-only
+
+# Phase 2: Test KB search
+curl -X POST http://localhost:8081/kb/search/customer -d '{"query": "carry-on allowance", "k": 4}'
+
+# Phase 3: Test enhanced chatbot
+curl -X POST http://localhost:8088/chat/session -d '{"customer_name": "Test User", "customer_email": "test@example.com"}'
+curl -X POST http://localhost:8088/chat/message -d '{"session_id": "SESSION_ID", "message": "What is my carry-on allowance?"}'
+```
+
+This approach is much cleaner and leverages your existing infrastructure perfectly. Would you like me to start with enhancing the existing ingestion service to support the knowledge base functionality?

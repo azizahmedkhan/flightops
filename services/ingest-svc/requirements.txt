@@ -9,5 +9,7 @@ loguru==0.7.2
 # optional LLM clients
 openai==1.40.3
 tiktoken==0.7.0
+# YAML parsing for frontmatter
+PyYAML==6.0.1
 
 arxiv==2.1.0
