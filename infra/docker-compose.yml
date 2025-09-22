@@ -153,6 +153,7 @@ services:
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - RETRIEVAL_SVC_URL=http://retrieval-svc:8086
       - AGENT_SVC_URL=http://agent-svc:8081
+      - DB_ROUTER_URL=http://db-router-svc:8000
       - DEBUGPY=true
     depends_on:
       redis:
@@ -163,9 +164,31 @@ services:
         condition: service_started
       comms-svc:
         condition: service_started
+      db-router-svc:
+        condition: service_started
     ports: ["8088:8088", "5678:5678"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db-router-svc:
+    build:
+      context: ..
+      dockerfile: services/db-router-svc/Dockerfile
+    
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASS:-postgres}@db:5432/${DB_NAME:-flightops}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8089:8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -184,6 +207,7 @@ services:
       - CUSTOMER_CHAT_URL=http://customer-chat-svc:8087
       - PREDICTIVE_URL=http://predictive-svc:8085
       - CREW_URL=http://crew-svc:8086
+      - DB_ROUTER_URL=http://db-router-svc:8000
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-flightops}
@@ -205,6 +229,8 @@ services:
       predictive-svc:
         condition: service_started
       crew-svc:
+        condition: service_started
+      db-router-svc:
         condition: service_started
     ports: ["8080:8080"]
 

@@ -336,3 +336,115 @@ curl -X POST http://localhost:8088/chat/message -d '{"session_id": "SESSION_ID",
 ```
 
 This approach is much cleaner and leverages your existing infrastructure perfectly. Would you like me to start with enhancing the existing ingestion service to support the knowledge base functionality?
+
+
+
+
+Here's a comprehensive prompt you can give to Cursor AI to implement this functionality:
+
+```
+# Create SQL Agent Service for Natural Language Database Queries
+
+I need you to create a new microservice called `sql-agent-svc` that uses LLM to understand natural language queries and generate appropriate SQL database queries. This service should be able to handle queries about flights, bookings, crew, and aircraft data.
+
+## Requirements
+
+### 1. Create the service structure
+- Create `services/sql-agent-svc/` directory
+- Add `main.py`, `utils.py`, `requirements.txt`, and `Dockerfile`
+- Follow the existing service patterns in the codebase
+
+### 2. Database Schema Context
+The service needs to understand these tables:
+- **flights**: flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
+- **bookings**: flight_no, flight_date, pnr, passenger_name, has_connection, connecting_flight_no
+- **crew_details**: crew_id, crew_name, duty_start_time, max_duty_hours
+- **crew_roster**: flight_no, flight_date, crew_id, crew_role
+- **aircraft_status**: tail_number, current_location, status
+
+Common airport codes: AKL (Auckland), WLG (Wellington), CHC (Christchurch), DUD (Dunedin), ZQN (Queenstown), NPE (Napier)
+
+### 3. Core Functionality
+
+#### Query Analysis Endpoint (`/analyze-query`)
+- Takes a natural language query as input
+- Uses LLM to determine if database access is needed
+- Identifies which tables are relevant
+- Extracts parameters and conditions
+- Returns structured analysis in JSON format
+
+#### SQL Generation Endpoint (`/generate-sql`)
+- Takes query analysis and generates appropriate SQL
+- Handles single-table and multi-table queries with JOINs
+- Supports common operators (=, !=, >, <, >=, <=, LIKE, ILIKE)
+- Handles date comparisons and CURRENT_DATE references
+
+#### Query Execution Endpoint (`/execute-query`)
+- Executes generated SQL safely with parameterized queries
+- Returns results as JSON with column names
+- Handles errors gracefully
+
+#### Smart Query Endpoint (`/smart-query`)
+- Complete pipeline: analyze → generate SQL → execute → format response
+- Uses LLM to format database results into natural language
+- Handles cases where no results are found
+
+### 4. Example Queries to Support
+
+**Flight Queries:**
+- "When is the next flight to Wellington?"
+- "Show me all delayed flights today"
+- "What flights are departing from Auckland?"
+- "Find flights to Christchurch tomorrow"
+
+**Booking Queries:**
+- "How many passengers are on NZ123?"
+- "Show me passengers with connections"
+- "Who is passenger PNR001?"
+
+**Crew Queries:**
+- "Who is the crew for NZ123?"
+- "Show me all captains"
+- "Which crew members are available?"
+
+**Aircraft Queries:**
+- "What's the status of aircraft ZK-NAA?"
+- "Show me all aircraft in Auckland"
+- "Which aircraft are under maintenance?"
+
+### 5. Technical Requirements
+
+- Use FastAPI framework (consistent with other services)
+- Use the shared LLM client from `services/shared/llm_client.py`
+- Use the database connection pool pattern from other services
+- Add proper error handling and logging
+- Include Pydantic models for request/response validation
+- Add rate limiting and request validation
+- Follow the existing service structure and patterns
+
+### 6. Integration Points
+
+- Add the new service to `infra/docker-compose.yml`
+- Update `services/gateway-api/main.py` to add a `/smart-ask` endpoint that routes to this service
+- The service should fallback to existing agent service if database query isn't appropriate
+
+### 7. LLM Prompt Engineering
+
+Create sophisticated prompts that:
+- Understand natural language intent
+- Map city names to airport codes
+- Handle time references (today, tomorrow, next, etc.)
+- Generate safe, parameterized SQL queries
+- Format results in helpful, natural language responses
+
+### 8. Security Considerations
+
+- Use parameterized queries to prevent SQL injection
+- Validate all inputs
+- Limit query complexity and result sets
+- Add query timeout handling
+
+Please implement this service following the existing codebase patterns and make it production-ready with proper error handling, logging, and documentation.
+```
+
+This prompt gives Cursor AI all the context it needs to implement the SQL agent service while following your existing patterns and requirements. The AI will be able to create a complete, functional service that integrates seamlessly with your current architecture.

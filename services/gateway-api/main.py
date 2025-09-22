@@ -21,6 +21,8 @@ from llm_tracker import LLMTracker
 service = BaseService("gateway-api", "1.0.0")
 app = service.get_app()
 
+# Database connection is initialized at module load time
+
 # Get environment variables using the base service
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
 RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://retrieval-svc:8081")
@@ -29,6 +31,7 @@ INGEST_URL = service.get_env_var("INGEST_URL", "http://ingest-svc:8084")
 CUSTOMER_CHAT_URL = service.get_env_var("CUSTOMER_CHAT_URL", "http://customer-chat-svc:8085")
 PREDICTIVE_URL = service.get_env_var("PREDICTIVE_URL", "http://predictive-svc:8085")
 CREW_URL = service.get_env_var("CREW_URL", "http://crew-svc:8086")
+DB_ROUTER_URL = service.get_env_var("DB_ROUTER_URL", "http://db-router-svc:8000")
 
 # Database configuration
 DB_HOST = service.get_env_var("DB_HOST", "db")
@@ -43,7 +46,22 @@ EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-sma
 
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
-db_pool = None
+
+# Initialize connection pool immediately
+try:
+    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    service.logger.info("Database connection pool initialized successfully")
+except Exception as init_error:
+    service.logger.warning(f"Failed to initialize database connection: {init_error}")
+    db_pool = None
+
+# Initialize database tables after connection pool is ready
+if db_pool:
+    try:
+        ensure_tables_exist()
+        service.logger.info("Database tables initialized successfully")
+    except Exception as init_error:
+        service.logger.warning(f"Failed to initialize database tables: {init_error}")
 
 # Global LLM message store (in production, use Redis or database)
 llm_messages = []
@@ -102,27 +120,16 @@ class Policy(BaseModel):
     meta: Dict[str, Any]
     embedding: Optional[List[float]] = None
 
-@asynccontextmanager
-async def lifespan(app):
-    global db_pool
-    from utils import log_startup
-    log_startup("gateway-api")
-    
-    # Initialize connection pool
-    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
-    
-    yield
-    
-    # Close connection pool on shutdown
-    if db_pool:
-        db_pool.close()
-
-# Set lifespan for the app
-app.router.lifespan_context = lifespan
+# Database connection is initialized at module load time
 
 # Database helper functions
 def get_db_connection():
-    return db_pool.connection()
+    if db_pool is not None:
+        return db_pool.connection()
+    else:
+        # Fallback to direct connection if pool is not available
+        import psycopg
+        return psycopg.connect(DB_CONN_STRING)
 
 def _execute_with_recovery(operation):
     try:
@@ -250,11 +257,7 @@ def ensure_tables_exist() -> None:
                 cur.execute(statement)
 
 
-# Prime the database schema when the service starts.
-try:
-    ensure_tables_exist()
-except Exception as init_error:
-    service.logger.warning(f"Failed to initialize database tables at startup: {init_error}")
+# Database schema will be initialized in the lifespan function after connection pool is ready
 
 # Override the root endpoint to redirect to docs
 @app.get("/")
@@ -356,6 +359,40 @@ async def search(payload: dict, request: Request):
     except Exception as e:
         service.log_error(e, "search endpoint")
         raise
+
+@app.post("/smart-ask")
+async def smart_ask(payload: dict, request: Request):
+    """
+    Smart query endpoint that routes natural language queries to the database router service.
+    This endpoint combines routing, execution, and formatting for database queries.
+    """
+    try:
+        service.logger.info(f"Processing smart-ask request: {payload}")
+        
+        # Validate required fields
+        if "text" not in payload:
+            raise HTTPException(status_code=400, detail="Missing required field: text")
+        
+        # Set default auth role if not provided
+        if "auth" not in payload:
+            payload["auth"] = {"role": "public"}
+        
+        async with httpx.AsyncClient() as client:
+            r = await client.post(f"{DB_ROUTER_URL}/smart-query", json=payload, timeout=30.0)
+            
+            if r.status_code != 200:
+                service.logger.error(f"DB router service error: {r.status_code} - {r.text}")
+                raise HTTPException(status_code=r.status_code, detail=f"Database router error: {r.text}")
+            
+            result = r.json()
+            service.log_request(request, {"status": "success", "intent": result.get("intent")})
+            return result
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        service.log_error(e, "smart-ask endpoint")
+        raise HTTPException(status_code=500, detail=f"Smart query failed: {str(e)}")
 
 # Customer Chat Service Proxies
 @app.post("/customer-chat/session")

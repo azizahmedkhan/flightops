@@ -9,6 +9,7 @@ import os
 import requests
 from typing import Dict, Any, Optional, List, Union
 from openai import OpenAI
+from loguru import logger
 try:
     from .llm_tracker import LLMTracker
 except ImportError:  # pragma: no cover - fallback for path-based imports
@@ -223,6 +224,93 @@ class LLMClient:
             if fallback_value is not None:
                 return fallback_value
             raise ValueError(f"Failed to parse JSON response: {content}")
+    
+    async def call_function(
+        self,
+        messages: List[Dict[str, str]],
+        function_schema: Dict[str, Any],
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Call a function using OpenAI's function calling feature.
+        
+        Args:
+            messages: List of message dictionaries
+            function_schema: Function schema for OpenAI function calling
+            model: Model to use (defaults to self.model)
+            temperature: Temperature for generation
+            max_tokens: Maximum tokens to generate
+            metadata: Additional metadata for tracking
+            **kwargs: Additional arguments for chat completion
+            
+        Returns:
+            Dictionary containing the function call response
+        """
+        try:
+            start_time = time.time()
+            model = model or self.model
+            
+            # Make the API call directly with function calling
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                functions=[function_schema],
+                function_call={"name": function_schema["name"]},
+                **kwargs
+            )
+            
+            # Extract response
+            message = response.choices[0].message
+            content = message.content
+            function_call = message.function_call
+            
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Prepare tracking metadata
+            tracking_metadata = {
+                "function": function_schema["name"],
+                "model": model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                **(metadata or {})
+            }
+            
+            # Create LLM message for tracking
+            llm_message = {
+                "service": self.service_name,
+                "model": model,
+                "prompt": messages[-1].get("content", "") if messages else "",
+                "response": content or "",
+                "function_call": {
+                    "name": function_call.name,
+                    "arguments": function_call.arguments
+                } if function_call else None,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "duration_ms": duration_ms,
+                "metadata": tracking_metadata,
+                "timestamp": time.time()
+            }
+            
+            # Send to gateway for tracking
+            self._send_message_to_gateway(llm_message)
+            
+            return {
+                "function_call": function_call,
+                "content": content,
+                "llm_message": llm_message,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "duration_ms": duration_ms
+            }
+                
+        except Exception as e:
+            logger.error(f"Function call failed: {e}")
+            raise
 
 
 # Convenience function to create a client for a service

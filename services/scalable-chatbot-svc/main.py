@@ -219,9 +219,10 @@ redis_manager = RedisManager()
 rate_limiter = RateLimiter(redis_manager)
 llm_client = LLMClient("scalable-chatbot-svc", model="gpt-4o-mini")
 
-# Environment variables for KB service URLs
+# Environment variables for service URLs
 RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8086")
 AGENT_SVC_URL = os.getenv("AGENT_SVC_URL", "http://agent-svc:8081")
+DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
 # Pydantic models
 class ChatMessage(BaseModel):
@@ -329,8 +330,8 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
     """Generate streaming response from ChatGPT"""
     try:
         # Import the new utility functions
-        from utils import (fetch_kb_context, route_query, format_kb_response, 
-                          create_air_nz_system_prompt, format_air_nz_response, 
+        from utils import (fetch_kb_context, fetch_database_context, route_query, format_kb_response, 
+                          format_database_response, create_air_nz_system_prompt, format_air_nz_response, 
                           add_heads_up_warning, get_safe_fallback_response)
         
         # Route the query to determine if it needs KB or flight status
@@ -343,9 +344,11 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             "kb_context": []
         }
         
-        # Fetch KB context if needed
+        # Fetch context based on query type
         kb_chunks = []
         kb_response = None
+        db_response = None
+        
         if query_type == "kb":
             kb_chunks = await fetch_kb_context(user_message, RETRIEVAL_SVC_URL)
             if kb_chunks:
@@ -355,21 +358,38 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             else:
                 # Use safe fallback for unknown KB queries
                 kb_response = get_safe_fallback_response("kb")
+        elif query_type == "database":
+            # For database queries, use the db-router-svc
+            db_data = await fetch_database_context(user_message, DB_ROUTER_URL)
+            if db_data:
+                response_metadata["database_context"] = db_data
+                # Format database response with Air New Zealand style citations
+                db_response = format_database_response(db_data, response_metadata["sources"])
+            else:
+                # Use safe fallback for database queries
+                db_response = get_safe_fallback_response("database")
         elif query_type == "flight":
-            # For flight status queries, check if we have flight context
-            if not session_context.get("flight_data"):
-                kb_response = get_safe_fallback_response("flight")
+            # For flight status queries, prefer live context; otherwise fall back to database lookup
+            if session_context.get("flight_data"):
+                pass  # existing flight context in session is already part of the prompt
+            else:
+                db_data = await fetch_database_context(user_message, DB_ROUTER_URL)
+                if db_data:
+                    response_metadata["database_context"] = db_data
+                    db_response = format_database_response(db_data, response_metadata["sources"])
+                else:
+                    kb_response = get_safe_fallback_response("flight")
         else:
             # Unknown query type - use general fallback
             kb_response = get_safe_fallback_response("general")
-        
+
         # Build context-aware prompt
         context_str = build_context_string(session_context)
-        
+
         # Create Air New Zealand system prompt
         system_content = create_air_nz_system_prompt(
             context_str=context_str,
-            kb_response=kb_response,
+            grounding_info=kb_response or db_response,
             query_type=query_type
         )
         

@@ -42,6 +42,25 @@ async def fetch_policy_context(query: str, retrieval_url: str) -> Optional[List[
     return None
 
 
+async def fetch_database_context(query: str, db_router_url: str) -> Optional[Dict[str, Any]]:
+    """Fetch database context from db-router-svc"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{db_router_url}/smart-query",
+                json={
+                    "text": query,
+                    "auth": {"role": "public"}
+                }
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data
+    except Exception as e:
+        print(f"Error fetching database context: {e}")
+    return None
+
+
 def calculate_query_hash(session_id: str, message: str, context: Dict[str, Any]) -> str:
     """Calculate hash for caching queries"""
     # Create a deterministic string from the inputs
@@ -245,7 +264,7 @@ async def fetch_kb_context(query: str, retrieval_url: str) -> Optional[List[Dict
 
 
 def route_query(message: str) -> str:
-    """Determine if query needs KB or flight status for Air New Zealand"""
+    """Determine if query needs KB, database, or flight status for Air New Zealand"""
     message_lower = message.lower()
     
     # Keywords that suggest knowledge base queries (Air New Zealand specific)
@@ -259,24 +278,27 @@ def route_query(message: str) -> str:
         "wheelchair", "mobility", "unaccompanied", "minor", "infant", "child"
     ]
     
-    # Keywords that suggest flight status queries
-    flight_keywords = [
+    # Keywords that suggest database queries (flight data, bookings, crew, etc.)
+    database_keywords = [
         "flight", "status", "departure", "arrival", "gate", "terminal", "delay", 
         "cancelled", "cancelled", "on-time", "boarding", "departed", "landed",
-        "nz", "air new zealand", "akl", "wlg", "chc", "dud", "zqn", "npe"
+        "nz", "air new zealand", "akl", "wlg", "chc", "dud", "zqn", "npe",
+        "next flight", "flights from", "flights to", "booking", "pnr", "reservation",
+        "crew", "pilot", "flight attendant", "aircraft", "tail number", "passenger",
+        "passengers", "count", "available", "duty", "roster", "schedule"
     ]
     
     # Check for KB keywords
     kb_score = sum(1 for keyword in kb_keywords if keyword in message_lower)
     
-    # Check for flight keywords
-    flight_score = sum(1 for keyword in flight_keywords if keyword in message_lower)
+    # Check for database keywords
+    database_score = sum(1 for keyword in database_keywords if keyword in message_lower)
     
-    # If KB keywords are present and more than flight keywords, route to KB
-    if kb_score > 0 and kb_score >= flight_score:
+    # If KB keywords are present and more than database keywords, route to KB
+    if kb_score > 0 and kb_score >= database_score:
         return "kb"
-    elif flight_score > 0:
-        return "flight"
+    elif database_score > 0:
+        return "database"
     else:
         # Default to KB for general queries
         return "kb"
@@ -284,7 +306,13 @@ def route_query(message: str) -> str:
 
 def get_safe_fallback_response(query_type: str) -> str:
     """Get safe fallback response for unknown queries"""
-    if query_type == "flight":
+    if query_type == "database":
+        return """• I can't confirm from current info about that specific flight or booking
+• Please check our website or mobile app for real-time updates
+• Contact our call center for immediate assistance
+
+Heads up: Flight information changes frequently, so always verify before traveling."""
+    elif query_type == "flight":
         return """• I can't confirm from current info about your flight status
 • Please check our website or mobile app for real-time updates
 • Contact our call center for immediate assistance
@@ -330,9 +358,50 @@ def format_kb_response(chunks: List[Dict[str, Any]], sources: List[str]) -> str:
     return response
 
 
-def create_air_nz_system_prompt(context_str: str, kb_response: str = None, query_type: str = "general") -> str:
+def format_database_response(db_data: Dict[str, Any], sources: List[str]) -> str:
+    """Format database responses with Air New Zealand style formatting"""
+    if not db_data:
+        return "I can't confirm from current info. Please contact our support team for assistance."
+
+    answer = (db_data.get("answer") or "").strip()
+    rows = db_data.get("rows", []) or []
+    args = db_data.get("args", {}) or {}
+
+    source_index = len(sources) + 1
+    source_label = f"[source {source_index}]"
+    sources.append("Air New Zealand operational database (historical schedule)")
+
+    if not rows:
+        destination = args.get("destination")
+        origin = args.get("origin")
+        if destination:
+            destination = destination.upper()
+        if origin:
+            origin = origin.upper()
+        if origin and destination:
+            route_phrase = f" from {origin} to {destination}"
+        elif destination:
+            route_phrase = f" to {destination}"
+        elif origin:
+            route_phrase = f" from {origin}"
+        else:
+            route_phrase = " for the requested route"
+
+        return (
+            f"• There are no flights{route_phrase} scheduled for the coming days in the current operations dataset. {source_label}"
+            "\n"
+            f"• Our records only include historical flights right now, so please check official channels for future schedules. {source_label}" 
+        )
+
+    if answer.startswith("•"):
+        return answer
+
+    return f"{answer}\n\n{source_label}"
+
+
+def create_air_nz_system_prompt(context_str: str, grounding_info: str = None, query_type: str = "general") -> str:
     """Create Air New Zealand system prompt with enterprise-ready restrictions"""
-    
+
     base_prompt = """You are an Air New Zealand customer service agent. You must follow these strict guidelines:
 
 RESPONSE RESTRICTIONS:
@@ -356,24 +425,33 @@ QUERY ROUTING:
 Session Context:
 {context_str}"""
 
-    if query_type == "kb" and kb_response:
-        base_prompt += f"""
+    if grounding_info:
+        if query_type == "kb":
+            base_prompt += f"""
 
 Knowledge Base Information:
-{kb_response}
+{grounding_info}
 
 IMPORTANT: You must ONLY use information from the provided knowledge base and session context. 
 Do not make up or assume any information not explicitly provided. 
 Always cite sources when referencing policy information.
 If you don't have specific information, direct customers to contact support for detailed assistance."""
-    else:
-        base_prompt += """
+        elif query_type in {"database", "flight"}:
+            base_prompt += f"""
+
+Database Information:
+{grounding_info}
+
+IMPORTANT: You must ONLY use the database facts provided above. 
+If the data shows no availability, communicate that clearly without speculation. 
+Never invent future schedules—direct customers to official channels for live updates."""
+
+    base_prompt += """
 
 Always be professional, helpful, and empathetic. If you don't have specific information, 
 direct customers to contact support for detailed assistance."""
 
     return base_prompt.format(context_str=context_str)
-
 
 def format_air_nz_response(response: str, sources: List[str] = None) -> str:
     """Format response according to Air New Zealand guidelines"""
