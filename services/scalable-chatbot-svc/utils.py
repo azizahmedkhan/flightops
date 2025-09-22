@@ -228,6 +228,195 @@ def create_response_template(response_type: str, session_id: str) -> Dict[str, A
     return base_template
 
 
+async def fetch_kb_context(query: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
+    """Search knowledge base via retrieval-svc"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{retrieval_url}/kb/search",
+                json={"q": query, "k": 3}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("results", [])
+    except Exception as e:
+        print(f"Error fetching KB context: {e}")
+    return None
+
+
+def route_query(message: str) -> str:
+    """Determine if query needs KB or flight status for Air New Zealand"""
+    message_lower = message.lower()
+    
+    # Keywords that suggest knowledge base queries (Air New Zealand specific)
+    kb_keywords = [
+        "policy", "policies", "rule", "rules", "allowance", "baggage", "check-in", 
+        "checkin", "excess", "fee", "fees", "dangerous", "goods", "fare", "rebooking", 
+        "delay", "credit", "credits", "assistance", "pet", "pets", "loyalty", 
+        "cutoff", "cut-off", "compensation", "refund", "refunds", "contact", 
+        "channel", "channels", "question", "questions", "sop", "template", "comm",
+        "airpoints", "koru", "lounge", "seat", "meal", "special", "medical",
+        "wheelchair", "mobility", "unaccompanied", "minor", "infant", "child"
+    ]
+    
+    # Keywords that suggest flight status queries
+    flight_keywords = [
+        "flight", "status", "departure", "arrival", "gate", "terminal", "delay", 
+        "cancelled", "cancelled", "on-time", "boarding", "departed", "landed",
+        "nz", "air new zealand", "akl", "wlg", "chc", "dud", "zqn", "npe"
+    ]
+    
+    # Check for KB keywords
+    kb_score = sum(1 for keyword in kb_keywords if keyword in message_lower)
+    
+    # Check for flight keywords
+    flight_score = sum(1 for keyword in flight_keywords if keyword in message_lower)
+    
+    # If KB keywords are present and more than flight keywords, route to KB
+    if kb_score > 0 and kb_score >= flight_score:
+        return "kb"
+    elif flight_score > 0:
+        return "flight"
+    else:
+        # Default to KB for general queries
+        return "kb"
+
+
+def get_safe_fallback_response(query_type: str) -> str:
+    """Get safe fallback response for unknown queries"""
+    if query_type == "flight":
+        return """• I can't confirm from current info about your flight status
+• Please check our website or mobile app for real-time updates
+• Contact our call center for immediate assistance
+
+Heads up: Flight information changes frequently, so always verify before traveling."""
+    else:
+        return """• I can't confirm from current info about that specific question
+• Please contact our support team for detailed assistance
+• You can also check our website for general information
+
+Heads up: Our support team has access to the most up-to-date information and can provide personalized assistance."""
+
+
+def format_kb_response(chunks: List[Dict[str, Any]], sources: List[str]) -> str:
+    """Format KB responses with Air New Zealand style formatting"""
+    if not chunks:
+        return "I can't confirm from current info. Please contact our support team for assistance."
+    
+    response_parts = []
+    source_citations = []
+    
+    # Process each chunk and create bullet points
+    for i, chunk in enumerate(chunks, 1):
+        snippet = chunk.get("snippet", "")
+        source = chunk.get("source", "unknown")
+        category = chunk.get("category", "unknown")
+        
+        # Add source citation
+        citation = f"[{i}]"
+        source_citations.append(f"{citation} {source} ({category})")
+        
+        # Format as bullet point
+        bullet_point = f"• {snippet}"
+        response_parts.append(bullet_point)
+    
+    # Combine response with sources
+    response = "\n".join(response_parts)
+    
+    # Add source footnotes
+    if source_citations:
+        response += f"\n\nSources:\n" + "\n".join(source_citations)
+    
+    return response
+
+
+def create_air_nz_system_prompt(context_str: str, kb_response: str = None, query_type: str = "general") -> str:
+    """Create Air New Zealand system prompt with enterprise-ready restrictions"""
+    
+    base_prompt = """You are an Air New Zealand customer service agent. You must follow these strict guidelines:
+
+RESPONSE RESTRICTIONS:
+- ONLY use information provided in the context below
+- NEVER make up or assume information not explicitly provided
+- ALWAYS cite sources for all claims using [source] footnotes
+- Use high-level, non-committal language for uncertain information
+- If you don't have specific information, say "I can't confirm from current info"
+
+RESPONSE FORMAT:
+- Start with 2-4 bullet points (•)
+- Add "Heads up:" for any exceptions or important notes
+- Include [source] footnotes for each claim
+- Use "I can't confirm from current info" for uncertainty
+
+QUERY ROUTING:
+- Flight status queries → use flight_status tool
+- Policy questions → use kb_search results
+- Unknown queries → provide safe fallback response
+
+Session Context:
+{context_str}"""
+
+    if query_type == "kb" and kb_response:
+        base_prompt += f"""
+
+Knowledge Base Information:
+{kb_response}
+
+IMPORTANT: You must ONLY use information from the provided knowledge base and session context. 
+Do not make up or assume any information not explicitly provided. 
+Always cite sources when referencing policy information.
+If you don't have specific information, direct customers to contact support for detailed assistance."""
+    else:
+        base_prompt += """
+
+Always be professional, helpful, and empathetic. If you don't have specific information, 
+direct customers to contact support for detailed assistance."""
+
+    return base_prompt.format(context_str=context_str)
+
+
+def format_air_nz_response(response: str, sources: List[str] = None) -> str:
+    """Format response according to Air New Zealand guidelines"""
+    
+    # If response is already formatted with bullet points, return as-is
+    if response.startswith("•"):
+        return response
+    
+    # Split response into sentences for bullet point formatting
+    sentences = [s.strip() for s in response.split('.') if s.strip()]
+    
+    # Take first 2-4 sentences for bullet points
+    bullet_sentences = sentences[:min(4, len(sentences))]
+    
+    # Format as bullet points
+    formatted_response = "\n".join([f"• {sentence}." for sentence in bullet_sentences])
+    
+    # Add remaining sentences if any
+    if len(sentences) > 4:
+        remaining = ". ".join(sentences[4:])
+        formatted_response += f"\n\n{remaining}."
+    
+    # Add source citations if provided
+    if sources:
+        formatted_response += f"\n\nSources:\n" + "\n".join(sources)
+    
+    return formatted_response
+
+
+def add_heads_up_warning(response: str, warning: str) -> str:
+    """Add a 'Heads up' warning to the response"""
+    if not warning:
+        return response
+    
+    # Insert heads up after first bullet point
+    lines = response.split('\n')
+    if len(lines) > 1 and lines[0].startswith('•'):
+        lines.insert(1, f"Heads up: {warning}")
+        return '\n'.join(lines)
+    else:
+        return f"Heads up: {warning}\n\n{response}"
+
+
 async def monitor_system_health(redis_manager, connection_manager) -> Dict[str, Any]:
     """Monitor system health and performance"""
     health_status = {

@@ -219,6 +219,10 @@ redis_manager = RedisManager()
 rate_limiter = RateLimiter(redis_manager)
 llm_client = LLMClient("scalable-chatbot-svc", model="gpt-4o-mini")
 
+# Environment variables for KB service URLs
+RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8086")
+AGENT_SVC_URL = os.getenv("AGENT_SVC_URL", "http://agent-svc:8081")
+
 # Pydantic models
 class ChatMessage(BaseModel):
     session_id: str
@@ -324,21 +328,54 @@ async def process_chat_message(session_id: str, message_data: Dict[str, Any], cl
 async def generate_streaming_response(session_id: str, user_message: str, session_context: Dict[str, Any], client_id: str):
     """Generate streaming response from ChatGPT"""
     try:
+        # Import the new utility functions
+        from utils import (fetch_kb_context, route_query, format_kb_response, 
+                          create_air_nz_system_prompt, format_air_nz_response, 
+                          add_heads_up_warning, get_safe_fallback_response)
+        
+        # Route the query to determine if it needs KB or flight status
+        query_type = route_query(user_message)
+        
+        # Initialize response metadata
+        response_metadata = {
+            "query_type": query_type,
+            "sources": [],
+            "kb_context": []
+        }
+        
+        # Fetch KB context if needed
+        kb_chunks = []
+        kb_response = None
+        if query_type == "kb":
+            kb_chunks = await fetch_kb_context(user_message, RETRIEVAL_SVC_URL)
+            if kb_chunks:
+                response_metadata["kb_context"] = kb_chunks
+                # Format KB response with Air New Zealand style citations
+                kb_response = format_kb_response(kb_chunks, response_metadata["sources"])
+            else:
+                # Use safe fallback for unknown KB queries
+                kb_response = get_safe_fallback_response("kb")
+        elif query_type == "flight":
+            # For flight status queries, check if we have flight context
+            if not session_context.get("flight_data"):
+                kb_response = get_safe_fallback_response("flight")
+        else:
+            # Unknown query type - use general fallback
+            kb_response = get_safe_fallback_response("general")
+        
         # Build context-aware prompt
         context_str = build_context_string(session_context)
         
-        # Use sentiment analysis prompt for better responses
-        prompt = PromptManager.get_sentiment_analysis_prompt(user_message, session_context)
+        # Create Air New Zealand system prompt
+        system_content = create_air_nz_system_prompt(
+            context_str=context_str,
+            kb_response=kb_response,
+            query_type=query_type
+        )
         
         # Create messages for ChatGPT
         messages = [
-            {"role": "system", "content": f"""You are a helpful FlightOps customer service agent. 
-            Use the following context to provide accurate, empathetic responses:
-            
-            {context_str}
-            
-            Always be professional, helpful, and empathetic. If you don't have specific information, 
-            direct customers to contact support for detailed assistance."""},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": user_message}
         ]
         
@@ -372,6 +409,9 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             final_response = chatgpt_response
             sentiment_analysis = {}
         
+        # Format response according to Air New Zealand guidelines
+        final_response = format_air_nz_response(final_response, response_metadata["sources"])
+        
         # Simulate streaming by sending chunks
         words = final_response.split()
         chunk_size = 3  # Send 3 words at a time
@@ -400,7 +440,10 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             "metadata": {
                 "sentiment_analysis": sentiment_analysis,
                 "tokens_used": response.get("tokens_used"),
-                "response_time_ms": response.get("duration_ms")
+                "response_time_ms": response.get("duration_ms"),
+                "query_type": response_metadata["query_type"],
+                "sources": response_metadata["sources"],
+                "kb_context": response_metadata["kb_context"]
             }
         }
         

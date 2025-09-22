@@ -22,7 +22,10 @@ from utils import (
     calculate_query_hash,
     sanitize_message,
     extract_entities,
-    calculate_similarity_score
+    calculate_similarity_score,
+    fetch_kb_context,
+    route_query,
+    format_kb_response
 )
 
 
@@ -309,6 +312,157 @@ class TestUtilityFunctions(TestChatbotService):
         assert similarity1 == 1.0  # Identical
         assert similarity2 > similarity3  # Some overlap vs no overlap
         assert similarity3 == 0.0  # No overlap
+
+
+class TestKnowledgeBaseIntegration(TestChatbotService):
+    """Test knowledge base integration functionality"""
+    
+    @pytest.mark.asyncio
+    async def test_fetch_kb_context(self):
+        """Test fetching knowledge base context"""
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "results": [
+                    {
+                        "doc_id": 1,
+                        "title": "Baggage Allowance Policy",
+                        "snippet": "Passengers are allowed one carry-on bag...",
+                        "source": "01_baggage_allowance.md",
+                        "category": "customer",
+                        "score": 0.95
+                    }
+                ]
+            }
+            
+            mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+            
+            kb_chunks = await fetch_kb_context("baggage allowance", "http://test-retrieval")
+            
+            assert kb_chunks is not None
+            assert len(kb_chunks) == 1
+            assert kb_chunks[0]["title"] == "Baggage Allowance Policy"
+            assert kb_chunks[0]["category"] == "customer"
+    
+    def test_route_query(self):
+        """Test query routing logic"""
+        # Test KB queries
+        assert route_query("What is the baggage allowance policy?") == "kb"
+        assert route_query("Tell me about check-in rules") == "kb"
+        assert route_query("What are the refund policies?") == "kb"
+        assert route_query("How do I get travel credits?") == "kb"
+        
+        # Test flight status queries
+        assert route_query("Is my flight on time?") == "flight"
+        assert route_query("What gate is my flight departing from?") == "flight"
+        assert route_query("Has flight NZ123 departed?") == "flight"
+        
+        # Test mixed queries (should prefer KB)
+        assert route_query("What is the policy for delayed flights?") == "kb"
+        
+        # Test general queries (default to KB)
+        assert route_query("Hello, I need help") == "kb"
+    
+    def test_format_kb_response(self):
+        """Test KB response formatting with citations"""
+        chunks = [
+            {
+                "snippet": "Passengers are allowed one carry-on bag weighing up to 7kg.",
+                "source": "01_baggage_allowance.md",
+                "category": "customer"
+            },
+            {
+                "snippet": "Excess baggage fees apply for additional items.",
+                "source": "03_excess_fees.md", 
+                "category": "customer"
+            }
+        ]
+        
+        sources = []
+        response = format_kb_response(chunks, sources)
+        
+        # Check that response contains the snippets
+        assert "Passengers are allowed one carry-on bag" in response
+        assert "Excess baggage fees apply" in response
+        
+        # Check that sources are properly formatted
+        assert len(sources) == 2
+        assert "[1] 01_baggage_allowance.md (customer)" in sources
+        assert "[2] 03_excess_fees.md (customer)" in sources
+        
+        # Check that sources are included in response
+        assert "Sources:" in response
+        assert "[1] 01_baggage_allowance.md (customer)" in response
+    
+    def test_format_kb_response_empty(self):
+        """Test KB response formatting with empty chunks"""
+        sources = []
+        response = format_kb_response([], sources)
+        
+        assert "I don't have specific information" in response
+        assert "contact our support team" in response
+        assert len(sources) == 0
+    
+    @pytest.mark.asyncio
+    async def test_kb_integration_flow(self, client):
+        """Test complete KB integration flow"""
+        with patch('httpx.AsyncClient') as mock_client:
+            # Mock KB response
+            mock_kb_response = Mock()
+            mock_kb_response.status_code = 200
+            mock_kb_response.json.return_value = {
+                "results": [
+                    {
+                        "doc_id": 1,
+                        "title": "Refund Policy",
+                        "snippet": "Refunds are available within 24 hours of booking...",
+                        "source": "15_policy_refunds_care.md",
+                        "category": "customer",
+                        "score": 0.92
+                    }
+                ]
+            }
+            
+            # Mock LLM response
+            mock_llm_response = Mock()
+            mock_llm_response.status_code = 200
+            mock_llm_response.json.return_value = {
+                "content": "Based on our refund policy, you can get a refund within 24 hours of booking.",
+                "tokens_used": 25,
+                "duration_ms": 500
+            }
+            
+            # Configure mock client to return different responses for different URLs
+            async def mock_post(url, **kwargs):
+                if "retrieval-svc" in url:
+                    return mock_kb_response
+                else:
+                    return mock_llm_response
+            
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+            
+            # Create a session
+            session_data = {
+                "customer_name": "KB Test User",
+                "customer_email": "kb@test.com"
+            }
+            
+            create_response = await client.post("/chat/session", json=session_data)
+            session_id = create_response.json()["session_id"]
+            
+            # Send a KB query
+            message_data = {
+                "session_id": session_id,
+                "message": "What is your refund policy?",
+                "client_id": "kb-test-client"
+            }
+            
+            response = await client.post("/chat/message", json=message_data)
+            assert response.status_code == 200
+            
+            # Verify that the KB service was called
+            assert mock_client.called
 
 
 class TestHealthAndMetrics(TestChatbotService):
