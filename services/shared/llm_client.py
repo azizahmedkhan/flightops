@@ -9,7 +9,10 @@ import os
 import requests
 from typing import Dict, Any, Optional, List, Union
 from openai import OpenAI
-from .llm_tracker import LLMTracker
+try:
+    from .llm_tracker import LLMTracker
+except ImportError:  # pragma: no cover - fallback for path-based imports
+    from llm_tracker import LLMTracker
 
 
 class LLMClient:

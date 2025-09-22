@@ -37,7 +37,7 @@ Add 12 new customer-facing policy documents to the existing /data/docs folder. T
    - 11_loyalty_basics.md
    - 12_airport_cutoffs.md
 
-2. Keep your existing files (customer_questions.md, policy_customer_compensation.md, etc.) as they are - they're valuable for operational use.
+2. Keep your existing files (13_customer_questions.md, 14_policy_customer_compensation.md, etc.) as they are - they're valuable for operational use.
 
 3. The new files should be customer-facing summaries that complement your existing operational policies.
 ```

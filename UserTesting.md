@@ -41,7 +41,7 @@ Search policies directly:
 curl -s http://localhost:8081/search -H 'content-type: application/json'   -d '{"q":"compensation for weather delay","k":3}' | jq
 ```
 
-You should see **policy_customer_compensation** snippet.
+You should see **14_policy_customer_compensation** snippet.
 
 ---
 

@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from psycopg.errors import UndefinedTable
 from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
 
 from base_service import BaseService
 from llm_tracker import LLMTracker
