@@ -458,7 +458,7 @@ def advanced_query_analysis(question: str, context: Dict) -> Dict:
     
     # Use OpenAI function calling for structured reasoning
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": question}],
         tools=[{"type": "function", "function": tool} for tool in tools],
         tool_choice="auto"

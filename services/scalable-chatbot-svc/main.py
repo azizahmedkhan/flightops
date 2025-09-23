@@ -217,6 +217,7 @@ class RateLimiter:
 # Initialize services
 service = BaseService("scalable-chatbot-svc", "1.0.0")
 app = service.get_app()
+logger = service.logger
 
 # Add CORS middleware for WebSocket connections
 app.add_middleware(
@@ -234,7 +235,7 @@ rate_limiter = RateLimiter(redis_manager)
 llm_client = LLMClient("scalable-chatbot-svc", model="gpt-4o-mini")
 
 # Environment variables for service URLs
-RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8086")
+RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8081")
 AGENT_SVC_URL = os.getenv("AGENT_SVC_URL", "http://agent-svc:8081")
 DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
@@ -262,12 +263,13 @@ class StreamingResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    logger.info("startup_event begin")
     await redis_manager.connect()
     
     # Start background task for cleaning up stale connections
     asyncio.create_task(cleanup_task())
     
-    print("🚀 Scalable Chatbot Service started - ready for 1000+ concurrent sessions")
+    logger.info("startup_event complete - scalable-chatbot-svc ready")
 
 
 async def cleanup_task():
@@ -277,18 +279,21 @@ async def cleanup_task():
             await asyncio.sleep(300)  # Run every 5 minutes
             await manager.cleanup_stale_connections(timeout_minutes=10)
         except Exception as e:
-            print(f"Error in cleanup task: {e}")
+            logger.error("cleanup_task error: %s", e, exc_info=True)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
+    logger.info("shutdown_event begin")
     await redis_manager.disconnect()
+    logger.info("shutdown_event complete")
 
 
 @app.websocket("/ws/{session_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: str):
     """WebSocket endpoint for real-time chat"""
+    logger.info("websocket_endpoint begin session_id=%s client_id=%s", session_id, client_id)
     await manager.connect(websocket, session_id, client_id)
     
     try:
@@ -315,12 +320,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: s
             
     except WebSocketDisconnect:
         manager.disconnect(client_id)
-        print(f"Client {client_id} disconnected from session {session_id}")
+        logger.info(
+            "websocket_endpoint disconnect session_id=%s client_id=%s",
+            session_id,
+            client_id
+        )
 
 
 async def process_chat_message(session_id: str, message_data: Dict[str, Any], client_id: str):
     """Process chat message asynchronously"""
     try:
+        logger.info(
+            "process_chat_message begin session_id=%s client_id=%s",
+            session_id,
+            client_id
+        )
         user_message = message_data.get("message", "")
         
         # Get session context
@@ -336,6 +350,11 @@ async def process_chat_message(session_id: str, message_data: Dict[str, Any], cl
                 "timestamp": datetime.now().isoformat()
             }
             await manager.send_personal_message(json.dumps(error_response), client_id)
+            logger.info(
+                "process_chat_message exit session_id=%s client_id=%s reason=rate_limited",
+                session_id,
+                client_id
+            )
             return
         
         # Check for cached response
@@ -348,12 +367,27 @@ async def process_chat_message(session_id: str, message_data: Dict[str, Any], cl
             cached_data["type"] = "complete"
             cached_data["from_cache"] = True
             await manager.send_personal_message(json.dumps(cached_data), client_id)
+            logger.info(
+                "process_chat_message exit session_id=%s client_id=%s reason=cached_response",
+                session_id,
+                client_id
+            )
             return
         
         # Generate new response using ChatGPT
         await generate_streaming_response(session_id, user_message, session_context, client_id)
+        logger.info(
+            "process_chat_message exit session_id=%s client_id=%s reason=generated_response",
+            session_id,
+            client_id
+        )
         
     except Exception as e:
+        logger.exception(
+            "process_chat_message error session_id=%s client_id=%s",
+            session_id,
+            client_id
+        )
         error_response = {
             "type": "error",
             "content": f"Error processing message: {str(e)}",
@@ -366,6 +400,11 @@ async def process_chat_message(session_id: str, message_data: Dict[str, Any], cl
 async def generate_streaming_response(session_id: str, user_message: str, session_context: Dict[str, Any], client_id: str):
     """Generate streaming response from ChatGPT"""
     try:
+        logger.info(
+            "generate_streaming_response begin session_id=%s client_id=%s",
+            session_id,
+            client_id
+        )
         # Import the new utility functions
         from utils import (fetch_kb_context, fetch_database_context, route_query, format_kb_response, 
                           format_database_response, create_air_nz_system_prompt, format_air_nz_response, 
@@ -518,11 +557,24 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         
         if "message_count" not in updated_context:
             updated_context["message_count"] = 0
-        updated_context["message_count"] += 1
+            updated_context["message_count"] += 1
         
         await redis_manager.set_session_context(session_id, updated_context)
+        logger.info(
+            "generate_streaming_response complete session_id=%s client_id=%s query_type=%s tokens=%s duration_ms=%s",
+            session_id,
+            client_id,
+            response_metadata.get("query_type"),
+            response.get("tokens_used"),
+            response.get("duration_ms")
+        )
         
     except Exception as e:
+        logger.exception(
+            "generate_streaming_response error session_id=%s client_id=%s",
+            session_id,
+            client_id
+        )
         error_response = {
             "type": "error",
             "content": f"Error generating response: {str(e)}",

@@ -136,7 +136,7 @@ const message = {
   service: 'my-service',
   prompt: 'Test prompt',
   response: 'Test response',
-  model: 'gpt-4'
+  model: 'gpt-4o-mini'
 }
 
 await fetch('/llm/track', {

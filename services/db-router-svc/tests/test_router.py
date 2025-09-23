@@ -82,6 +82,24 @@ class TestQueryRouter:
         assert response.confidence == 0.95
 
     @pytest.mark.asyncio
+    async def test_route_query_knowledge_base_detection(self, query_router):
+        """Policy questions should route to knowledge base intent."""
+        response = await query_router.route_query("What is the refund policy for domestic flights?")
+
+        assert response.intent == Intent.KNOWLEDGE_BASE
+        assert "query" in response.args
+        assert response.args["query"].lower().startswith("what is the refund policy")
+        assert response.args["k"] == 5
+
+    @pytest.mark.asyncio
+    async def test_route_query_knowledge_base_with_flight_number(self, query_router):
+        """Knowledge base detection should win even when a flight number is present."""
+        response = await query_router.route_query("Does NZ278 allow refunds under the fare policy?")
+
+        assert response.intent == Intent.KNOWLEDGE_BASE
+        assert response.args["query"].lower().startswith("does nz278 allow refunds")
+
+    @pytest.mark.asyncio
     async def test_route_query_flight_number_with_crew_context(self, query_router, mock_llm_client):
         """Flight queries mentioning crew should defer to LLM routing."""
         mock_llm_client.call_function.return_value = {

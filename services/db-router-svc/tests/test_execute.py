@@ -1,10 +1,10 @@
-"""
-Tests for db-router-svc SQL execution functionality.
-"""
+"""Tests for db-router-svc SQL execution functionality."""
+
+import asyncio
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import asyncio
 
 from ..execute import (
     DatabaseExecutor, initialize_database, close_database, 
@@ -144,14 +144,34 @@ class TestDatabaseExecutor:
         mock_conn = AsyncMock()
         mock_conn.fetch.side_effect = Exception("Database error")
         executor.pool.acquire.return_value.__aenter__.return_value = mock_conn
-        
+
         with pytest.raises(Exception, match="Database error"):
             await executor.execute_query(
                 Intent.FLIGHT_STATUS,
                 {"flight_no": "NZ278"},
                 "public"
             )
-    
+
+    @pytest.mark.asyncio
+    async def test_execute_query_next_flight_defaults_after_time(self, executor):
+        """Next flight queries should default after_time to current timestamp when absent."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        executor.pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+        await executor.execute_query(
+            Intent.NEXT_FLIGHT,
+            {"destination": "WLG", "origin": None},
+            "public"
+        )
+
+        assert mock_conn.fetch.called
+        # params are passed as *args, so inspect kwargs? call_args returns ((sql, param1,...), {})
+        positional_args = mock_conn.fetch.call_args[0]
+        assert positional_args[1] == "WLG"
+        assert positional_args[2] is None
+        assert isinstance(positional_args[3], datetime)
+
     @pytest.mark.asyncio
     async def test_execute_query_invalid_intent(self, executor):
         """Test handling of invalid intent."""

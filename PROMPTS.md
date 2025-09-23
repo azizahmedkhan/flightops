@@ -173,7 +173,7 @@ All prompts include fallback mechanisms:
 ## Usage Notes
 
 1. **API Key Dependency**: All prompts require `OPENAI_API_KEY` environment variable
-2. **Model Configuration**: Uses `CHAT_MODEL` environment variable (defaults to GPT-4)
+2. **Model Configuration**: Uses `CHAT_MODEL` environment variable (defaults to gpt-4o-mini)
 3. **Error Handling**: Each service implements graceful degradation when LLM is unavailable
 4. **Rate Limiting**: Consider implementing rate limiting for production use
 5. **Monitoring**: All LLM calls are logged for monitoring and debugging

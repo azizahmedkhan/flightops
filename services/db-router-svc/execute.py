@@ -6,6 +6,7 @@ for safe database queries.
 """
 
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 import asyncpg
 from loguru import logger
@@ -31,8 +32,8 @@ INTENT_SQL = {
         SELECT flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status
         FROM flights
         WHERE destination = $1
-          AND ($2 IS NULL OR origin = $2)
-          AND sched_dep_time > $3
+          AND ($2::text IS NULL OR origin = $2::text)
+          AND sched_dep_time > $3::timestamp
         ORDER BY sched_dep_time ASC
         LIMIT 3
         """,
@@ -197,10 +198,12 @@ class DatabaseExecutor:
         # Prepare parameters in the correct order
         params = []
         for param_name in param_names:
-            if param_name in args:
-                params.append(args[param_name])
-            else:
-                params.append(None)
+            value = args.get(param_name)
+
+            if param_name == "after_time":
+                value = self._normalize_after_time(value)
+
+            params.append(value)
         
         logger.debug(f"Executing query for intent {intent} with params: {params}")
         
@@ -229,11 +232,33 @@ class DatabaseExecutor:
         except Exception as e:
             logger.error(f"Query execution failed for intent {intent}: {e}")
             raise
-    
+
+    @staticmethod
+    def _normalize_after_time(value: Optional[Any]) -> datetime:
+        """Normalize after_time into a concrete UTC timestamp."""
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"", "now", "current", "immediately"}:
+                return datetime.utcnow()
+
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                logger.warning(
+                    "after_time parse failure for value '%s'; defaulting to current UTC time",
+                    value
+                )
+                return datetime.utcnow()
+
+        return datetime.utcnow()
+
     async def test_connection(self) -> bool:
         """
         Test database connection.
-        
+
         Returns:
             True if connection successful, False otherwise
         """
@@ -338,6 +363,9 @@ def validate_intent_args(intent: Intent, args: Dict[str, Any]) -> bool:
     Returns:
         True if args are valid, False otherwise
     """
+    if intent == Intent.KNOWLEDGE_BASE:
+        return True
+
     if intent not in INTENT_SQL:
         return False
     

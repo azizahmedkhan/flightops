@@ -5,6 +5,7 @@ This module handles natural language to intent routing using LLM function callin
 """
 
 import re
+import time
 from typing import Dict, Any, Optional, Tuple
 from loguru import logger
 import json
@@ -40,7 +41,8 @@ class QueryRouter:
                         "enum": [
                             "flight_status", "next_flight", "flights_from", "flights_to",
                             "booking_lookup", "crew_for_flight", "aircraft_status",
-                            "passenger_count", "crew_availability", "aircraft_by_location"
+                            "passenger_count", "crew_availability", "aircraft_by_location",
+                            "knowledge_base"
                         ],
                         "description": "The database intent that best matches the query"
                     },
@@ -82,6 +84,16 @@ class QueryRouter:
                             "location": {
                                 "type": "string",
                                 "description": "Location IATA code"
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Knowledge base query text"
+                            },
+                            "k": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 20,
+                                "description": "Number of knowledge base results to retrieve"
                             }
                         }
                     },
@@ -114,6 +126,32 @@ class QueryRouter:
         ]
         lowered = text.lower()
         return any(keyword in lowered for keyword in crew_keywords)
+
+    def _has_knowledge_base_context(self, text: str) -> bool:
+        """Detect if the query should be answered via the knowledge base."""
+        lowered = text.lower()
+
+        kb_keywords = [
+            "policy", "policies", "refund", "refunds", "allowance", "allowances",
+            "baggage", "luggage", "credit", "credits", "compensation", "fare",
+            "fares", "sop", "procedure", "procedures", "template", "templates",
+            "communication", "communications", "comm", "dangerous goods",
+            "special assistance", "wheelchair", "koru", "airpoints", "loyalty",
+            "voucher", "vouchers", "pet", "pets", "animal", "animals", "contact",
+            "contacts", "channel", "channels", "advisory", "advisories", "check-in",
+            "checkin", "cutoff", "cut-off", "disruption", "delay policy"
+        ]
+
+        db_keywords = [
+            "flight", "status", "departure", "arrival", "boarding", "gate",
+            "terminal", "crew", "pnr", "booking", "reservation", "passenger",
+            "tail", "aircraft", "roster", "schedule"
+        ]
+
+        kb_score = sum(1 for keyword in kb_keywords if keyword in lowered)
+        db_score = sum(1 for keyword in db_keywords if keyword in lowered)
+
+        return kb_score > 0 and kb_score >= db_score
     
     def _normalize_city_names(self, text: str) -> str:
         """Normalize city names to IATA codes in text."""
@@ -166,16 +204,43 @@ class QueryRouter:
         
         # Pre-process the text
         processed_text = text.strip()
-        
+        logger.info("route_query begin query='{}'", processed_text[:200])
+        start_time = time.time()
+
+        # Route knowledge base queries directly to embeddings search
+        if self._has_knowledge_base_context(processed_text):
+            logger.debug("Detected knowledge base query pattern")
+            response = RouteResponse(
+                intent=Intent.KNOWLEDGE_BASE,
+                args={"query": processed_text, "k": 5},
+                confidence=0.85
+            )
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(
+                "route_query exit intent={} confidence={} reason=knowledge_base_pattern duration_ms={:.2f}",
+                response.intent,
+                response.confidence,
+                duration_ms
+            )
+            return response
+
         # Check for flight number pattern first (fast path)
         flight_no = self._extract_flight_number(processed_text)
         if flight_no and not self._has_crew_context(processed_text):
             logger.debug(f"Detected flight number pattern: {flight_no}")
-            return RouteResponse(
+            response = RouteResponse(
                 intent=Intent.FLIGHT_STATUS,
                 args={"flight_no": flight_no, "date": None},
                 confidence=0.95
             )
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(
+                "route_query exit intent={} confidence={} reason=flight_number_pattern duration_ms={:.2f}",
+                response.intent,
+                response.confidence,
+                duration_ms
+            )
+            return response
         elif flight_no:
             logger.debug(
                 "Detected flight number pattern but crew context present; deferring to LLM routing"
@@ -203,6 +268,7 @@ class QueryRouter:
         - passenger_count: Get passenger count for a flight (requires flight_no, date)
         - crew_availability: Find available crew (requires date, optional role)
         - aircraft_by_location: Find aircraft at a location (requires location)
+        - knowledge_base: Answer general policy, procedure, or customer questions (requires query text)
         
         IATA codes for New Zealand airports:
         AKL=Auckland, WLG=Wellington, CHC=Christchurch, DUD=Dunedin, ZQN=Queenstown, NPE=Napier,
@@ -279,18 +345,24 @@ class QueryRouter:
                         logger.warning(f"Failed to normalize time: {e}")
                         intent_args["after_time"] = "now"
             
-            logger.info(f"Successfully routed query to {intent} with args: {intent_args}")
-            
-            return RouteResponse(
+            response = RouteResponse(
                 intent=intent,
                 args=intent_args,
                 confidence=float(confidence)
             )
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(
+                "route_query exit intent={} confidence={} duration_ms={:.2f}",
+                response.intent,
+                response.confidence,
+                duration_ms
+            )
+            return response
             
         except Exception as e:
             logger.error(f"LLM routing failed: {e}")
             return self._fallback_route(processed_text)
-    
+
     def _fallback_route(self, text: str) -> RouteResponse:
         """
         Fallback routing when LLM fails.
@@ -307,26 +379,50 @@ class QueryRouter:
         text_lower = text.lower()
         
         if any(word in text_lower for word in ["status", "flight", "nz"]):
-            return RouteResponse(
+            response = RouteResponse(
                 intent=Intent.FLIGHT_STATUS,
                 args={"flight_no": "UNKNOWN", "date": None},
                 confidence=0.3
             )
+            logger.info(
+                "route_query exit intent={} confidence={} reason=fallback_flight_status",
+                response.intent,
+                response.confidence
+            )
+            return response
         elif any(word in text_lower for word in ["next", "flight", "to"]):
-            return RouteResponse(
+            response = RouteResponse(
                 intent=Intent.NEXT_FLIGHT,
                 args={"destination": "WLG", "origin": None, "after_time": "now"},
                 confidence=0.3
             )
+            logger.info(
+                "route_query exit intent={} confidence={} reason=fallback_next_flight",
+                response.intent,
+                response.confidence
+            )
+            return response
         elif any(word in text_lower for word in ["booking", "pnr", "reservation"]):
-            return RouteResponse(
+            response = RouteResponse(
                 intent=Intent.BOOKING_LOOKUP,
                 args={"pnr": "UNKNOWN"},
                 confidence=0.3
             )
+            logger.info(
+                "route_query exit intent={} confidence={} reason=fallback_booking_lookup",
+                response.intent,
+                response.confidence
+            )
+            return response
         else:
-            return RouteResponse(
+            response = RouteResponse(
                 intent=Intent.FLIGHT_STATUS,
                 args={"flight_no": "UNKNOWN", "date": None},
                 confidence=0.1
             )
+            logger.info(
+                "route_query exit intent={} confidence={} reason=fallback_default",
+                response.intent,
+                response.confidence
+            )
+            return response

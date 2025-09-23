@@ -18,7 +18,7 @@ class LLMTracker:
         service_name: str,
         prompt: str,
         response: str,
-        model: str = "gpt-4",
+        model: str = "gpt-4o-mini",
         tokens_used: Optional[int] = None,
         duration_ms: Optional[float] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -30,7 +30,7 @@ class LLMTracker:
             service_name: Name of the service making the call
             prompt: The prompt sent to the LLM
             response: The response received from the LLM
-            model: The model used (default: gpt-4)
+            model: The model used (default: gpt-4o-mini)
             tokens_used: Number of tokens used (if available)
             duration_ms: Duration of the call in milliseconds (if available)
             metadata: Additional metadata about the call
@@ -79,7 +79,7 @@ class LLMTracker:
                 if isinstance(result, dict):
                     prompt = result.get('prompt', '')
                     response = result.get('response', '')
-                    model = result.get('model', 'gpt-4')
+                    model = result.get('model', 'gpt-4o-mini')
                     tokens_used = result.get('tokens_used')
                     metadata = result.get('metadata', {})
                     
@@ -107,7 +107,7 @@ class LLMTracker:
                     service_name=service_name,
                     prompt=str(args[0]) if args else '',
                     response=f"Error: {str(e)}",
-                    model=kwargs.get('model', 'gpt-4'),
+                    model=kwargs.get('model', 'gpt-4o-mini'),
                     duration_ms=duration_ms,
                     metadata={'error': True, 'error_type': type(e).__name__}
                 )
@@ -118,12 +118,12 @@ class LLMTracker:
         return wrapper
 
 
-def track_openai_call(service_name: str, model: str = "gpt-4"):
+def track_openai_call(service_name: str, model: str = "gpt-4o-mini"):
     """
     Decorator to track OpenAI API calls.
     
     Usage:
-        @track_openai_call("agent-svc", "gpt-4")
+        @track_openai_call("agent-svc", "gpt-4o-mini")
         def my_llm_function(prompt: str) -> str:
             # Your LLM logic here
             return response

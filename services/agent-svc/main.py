@@ -31,7 +31,7 @@ DB_PASS = service.get_env_var("DB_PASS")
 RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL")
 COMMS_URL = service.get_env_var("COMMS_URL")
 OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
-CHAT_MODEL = service.get_env_var("CHAT_MODEL")
+CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", True)
 
 # Initialize LLM client

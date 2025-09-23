@@ -151,7 +151,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
-      - RETRIEVAL_SVC_URL=http://retrieval-svc:8086
+      - RETRIEVAL_SVC_URL=http://retrieval-svc:8081
       - AGENT_SVC_URL=http://agent-svc:8081
       - DB_ROUTER_URL=http://db-router-svc:8000
       - DEBUGPY=true

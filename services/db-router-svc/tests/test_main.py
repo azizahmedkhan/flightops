@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from fastapi import HTTPException
 
 from ..main import app
-from ..models import Intent
+from ..models import Intent, RouteResponse
 
 
 class TestMainApp:
@@ -91,11 +91,11 @@ class TestRouteEndpoint:
         """Test successful routing."""
         with patch('services.db_router_svc.main.get_query_router') as mock_get_router:
             mock_router = AsyncMock()
-            mock_router.route_query.return_value = {
-                "intent": "flight_status",
-                "args": {"flight_no": "NZ278", "date": None},
-                "confidence": 0.95
-            }
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.FLIGHT_STATUS,
+                args={"flight_no": "NZ278", "date": None},
+                confidence=0.95
+            )
             mock_get_router.return_value = mock_router
             
             response = client.post("/route", json={"text": "What's the status of NZ278?"})
@@ -128,15 +128,15 @@ class TestSmartQueryEndpoint:
         with patch('services.db_router_svc.main.get_query_router') as mock_get_router, \
              patch('services.db_router_svc.main.get_llm_client') as mock_get_llm, \
              patch('services.db_router_svc.main.execute_intent_query') as mock_execute, \
-             patch('services.db_router_svc.main.format_query_answer') as mock_format:
+            patch('services.db_router_svc.main.format_query_answer') as mock_format:
             
             # Mock dependencies
             mock_router = AsyncMock()
-            mock_router.route_query.return_value = {
-                "intent": Intent.FLIGHT_STATUS,
-                "args": {"flight_no": "NZ278", "date": None},
-                "confidence": 0.95
-            }
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.FLIGHT_STATUS,
+                args={"flight_no": "NZ278", "date": None},
+                confidence=0.95
+            )
             mock_get_router.return_value = mock_router
             
             mock_llm = AsyncMock()
@@ -156,18 +156,55 @@ class TestSmartQueryEndpoint:
             assert data["intent"] == "flight_status"
             assert len(data["rows"]) == 1
             assert data["rows"][0]["flight_no"] == "NZ278"
-    
+
+    def test_smart_query_knowledge_base(self, client):
+        """Test smart query routing to knowledge base search."""
+        with patch('services.db_router_svc.main.get_query_router') as mock_get_router, \
+             patch('services.db_router_svc.main.get_llm_client') as mock_get_llm, \
+             patch('services.db_router_svc.main.query_knowledge_base', new_callable=AsyncMock) as mock_kb_search:
+
+            mock_router = AsyncMock()
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.KNOWLEDGE_BASE,
+                args={"query": "What is the refund policy?", "k": 5},
+                confidence=0.9
+            )
+            mock_get_router.return_value = mock_router
+
+            mock_llm = AsyncMock()
+            mock_get_llm.return_value = mock_llm
+
+            mock_kb_search.return_value = (
+                [{
+                    "title": "Refund Policy",
+                    "snippet": "Refunds are available within 24 hours of purchase.",
+                    "category": "policy"
+                }],
+                {"mode": "hybrid", "embeddings_available": True}
+            )
+
+            response = client.post("/smart-query", json={
+                "text": "What is the refund policy?"
+            })
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["intent"] == "knowledge_base"
+            assert data["rows"][0]["title"] == "Refund Policy"
+            assert data["metadata"]["retrieval"]["mode"] == "hybrid"
+            assert "refund" in data["answer"].lower()
+
     def test_smart_query_invalid_args(self, client):
         """Test smart query with invalid arguments."""
         with patch('services.db_router_svc.main.get_query_router') as mock_get_router, \
              patch('services.db_router_svc.main.validate_intent_args') as mock_validate:
             
             mock_router = AsyncMock()
-            mock_router.route_query.return_value = {
-                "intent": Intent.FLIGHT_STATUS,
-                "args": {"flight_no": "NZ278"},
-                "confidence": 0.95
-            }
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.FLIGHT_STATUS,
+                args={"flight_no": "NZ278"},
+                confidence=0.95
+            )
             mock_get_router.return_value = mock_router
             
             mock_validate.return_value = False  # Invalid args
@@ -188,11 +225,11 @@ class TestSmartQueryEndpoint:
              patch('services.db_router_svc.main.execute_intent_query') as mock_execute:
             
             mock_router = AsyncMock()
-            mock_router.route_query.return_value = {
-                "intent": Intent.FLIGHT_STATUS,
-                "args": {"flight_no": "NZ278"},
-                "confidence": 0.95
-            }
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.FLIGHT_STATUS,
+                args={"flight_no": "NZ278"},
+                confidence=0.95
+            )
             mock_get_router.return_value = mock_router
             
             mock_validate.return_value = True
@@ -217,11 +254,11 @@ class TestSmartQueryEndpoint:
             
             # Mock dependencies
             mock_router = AsyncMock()
-            mock_router.route_query.return_value = {
-                "intent": Intent.FLIGHT_STATUS,
-                "args": {"flight_no": "NZ278"},
-                "confidence": 0.95
-            }
+            mock_router.route_query.return_value = RouteResponse(
+                intent=Intent.FLIGHT_STATUS,
+                args={"flight_no": "NZ278"},
+                confidence=0.95
+            )
             mock_get_router.return_value = mock_router
             
             mock_llm = AsyncMock()
@@ -252,9 +289,10 @@ class TestListIntentsEndpoint:
         data = response.json()
         assert "intents" in data
         assert "count" in data
-        assert len(data["intents"]) == 10
+        assert len(data["intents"]) == len(Intent)
         assert "flight_status" in data["intents"]
         assert "next_flight" in data["intents"]
+        assert "knowledge_base" in data["intents"]
 
 
 class TestAnswerFormatting:

@@ -24,6 +24,7 @@ class Intent(str, Enum):
     PASSENGER_COUNT = "passenger_count"
     CREW_AVAILABILITY = "crew_availability"
     AIRCRAFT_BY_LOCATION = "aircraft_by_location"
+    KNOWLEDGE_BASE = "knowledge_base"
 
 
 class RouteRequest(BaseModel):

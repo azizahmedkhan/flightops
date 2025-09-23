@@ -9,13 +9,14 @@ import os
 import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 import uvicorn
+import httpx
 
 from models import (
     RouteRequest, RouteResponse, SmartQueryRequest, SmartQueryResponse,
@@ -36,6 +37,12 @@ llm_client: LLMClient = None
 query_router: QueryRouter = None
 base_service: BaseService = None
 
+RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8081")
+try:
+    DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
+except ValueError:
+    DEFAULT_KB_TOP_K = 5
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,13 +55,24 @@ async def lifespan(app: FastAPI):
     try:
         # Initialize base service
         base_service = BaseService("db-router-svc")
-        
+
         # Initialize LLM client
         llm_client = LLMClient("db-router-svc")
-        
+
         # Initialize query router
         query_router = QueryRouter(llm_client)
-        
+
+        # Configure retrieval service for knowledge base lookups
+        global RETRIEVAL_SVC_URL, DEFAULT_KB_TOP_K
+        RETRIEVAL_SVC_URL = base_service.get_env_var("RETRIEVAL_SVC_URL", RETRIEVAL_SVC_URL)
+        try:
+            DEFAULT_KB_TOP_K = int(base_service.get_env_var("KB_TOP_K", str(DEFAULT_KB_TOP_K)))
+        except ValueError:
+            DEFAULT_KB_TOP_K = 5
+        logger.info(
+            f"Knowledge base retrieval configured: url={RETRIEVAL_SVC_URL}, default_top_k={DEFAULT_KB_TOP_K}"
+        )
+
         # Initialize database
         database_url = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/flightops")
         await initialize_database(database_url)
@@ -116,6 +134,72 @@ def get_query_router() -> QueryRouter:
     return query_router
 
 
+async def query_knowledge_base(query: str, top_k: int = DEFAULT_KB_TOP_K) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Call retrieval service to fetch knowledge base snippets."""
+    sanitized_query = (query or "").strip()
+    if not sanitized_query:
+        return [], {"mode": "empty", "embeddings_available": False}
+
+    try:
+        bounded_top_k = max(1, min(int(top_k), 20))
+    except (TypeError, ValueError):
+        bounded_top_k = DEFAULT_KB_TOP_K
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{RETRIEVAL_SVC_URL}/kb/search",
+                json={"q": sanitized_query, "k": bounded_top_k}
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPError as exc:
+        logger.error(f"Knowledge base search HTTP error: {exc}")
+        return [], {"mode": "error", "error": str(exc)}
+    except Exception as exc:
+        logger.error(f"Knowledge base search failed: {exc}")
+        return [], {"mode": "error", "error": str(exc)}
+
+    results = data.get("results", []) if isinstance(data, dict) else []
+    metadata = {
+        "mode": data.get("mode") if isinstance(data, dict) else None,
+        "embeddings_available": data.get("embeddings_available") if isinstance(data, dict) else None,
+        "total_documents": data.get("total_documents") if isinstance(data, dict) else None,
+        "category_counts": data.get("category_counts") if isinstance(data, dict) else None
+    }
+    return results, metadata
+
+
+def format_knowledge_base_answer(rows: List[Dict[str, Any]]) -> str:
+    """Create a grounded response from knowledge base snippets."""
+    if not rows:
+        return (
+            "I couldn't find any matching policy information in the knowledge base right now.\n"
+            "Please contact our support team if you need more detailed guidance."
+        )
+
+    bullets = []
+    citations = []
+    for index, row in enumerate(rows, start=1):
+        snippet = (row.get("snippet") or row.get("content") or "").strip()
+        if snippet:
+            bullets.append(f"- {snippet}")
+        else:
+            bullets.append("- Reference policy found, but no summary snippet available.")
+
+        title = (row.get("title") or row.get("source") or "Policy reference").strip()
+        category = (row.get("category") or "general").strip()
+        citations.append(f"[{index}] {title} ({category})")
+
+    response_parts = ["\n".join(bullets)]
+    if citations:
+        response_parts.append("")
+        response_parts.append("Sources:")
+        response_parts.extend(citations)
+
+    return "\n".join(part for part in response_parts if part).strip()
+
+
 async def format_query_answer(
     intent: Intent,
     args: Dict[str, Any],
@@ -134,6 +218,9 @@ async def format_query_answer(
     Returns:
         Formatted answer string
     """
+    if intent == Intent.KNOWLEDGE_BASE:
+        return format_knowledge_base_answer(rows)
+
     if not rows:
         return "No results found for your query."
     
@@ -270,7 +357,52 @@ async def smart_query(
         
         # Step 1: Route the query
         route_response = await router.route_query(request.text)
-        
+
+        # Knowledge base queries bypass SQL execution and use embeddings search
+        if route_response.intent == Intent.KNOWLEDGE_BASE:
+            kb_args = dict(route_response.args)
+            query_text = kb_args.get("query") or request.text
+
+            try:
+                parsed_top_k = int(kb_args.get("k", DEFAULT_KB_TOP_K))
+            except (TypeError, ValueError):
+                parsed_top_k = DEFAULT_KB_TOP_K
+
+            bounded_top_k = max(1, min(parsed_top_k, 20))
+
+            kb_rows, retrieval_meta = await query_knowledge_base(query_text, bounded_top_k)
+            kb_args.setdefault("query", query_text)
+            kb_args["k"] = bounded_top_k
+
+            answer = await format_query_answer(
+                route_response.intent,
+                kb_args,
+                kb_rows,
+                llm_client
+            )
+
+            metadata = {
+                "row_count": len(kb_rows),
+                "confidence": route_response.confidence,
+                "intent": route_response.intent.value,
+                "args": kb_args,
+                "retrieval": retrieval_meta,
+                "role": request.auth.get("role", "public")
+            }
+
+            logger.info(
+                f"Knowledge base query completed: {len(kb_rows)} results, "
+                f"confidence {route_response.confidence}"
+            )
+
+            return SmartQueryResponse(
+                answer=answer,
+                rows=kb_rows,
+                intent=route_response.intent,
+                args=kb_args,
+                metadata=metadata
+            )
+
         # Step 2: Validate arguments
         if not validate_intent_args(route_response.intent, route_response.args):
             raise HTTPException(

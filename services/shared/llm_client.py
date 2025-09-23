@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover - fallback for path-based imports
 class LLMClient:
     """Centralized LLM client with built-in logging and tracking."""
     
-    def __init__(self, service_name: str, api_key: Optional[str] = None, model: str = "gpt-4"):
+    def __init__(self, service_name: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         """
         Initialize the LLM client.
         
@@ -120,6 +120,16 @@ class LLMClient:
         start_time = time.time()
         model = model or self.model
         prompt = self._extract_prompt(messages)
+        prompt_preview = (prompt[:120] + "...") if len(prompt) > 120 else prompt
+
+        logger.info(
+            "chat_completion begin service={} model={} temperature={} max_tokens={} prompt='{}'",
+            self.service_name,
+            model,
+            temperature,
+            max_tokens,
+            prompt_preview
+        )
 
         logger.debug("LLM request payload", messages=messages, model=model)
 
@@ -158,6 +168,14 @@ class LLMClient:
                 tokens_used=tokens_used
             )
 
+            logger.info(
+                "chat_completion success service={} model={} tokens_used={} duration_ms={:.2f}",
+                self.service_name,
+                model,
+                tokens_used,
+                duration_ms
+            )
+
             return {
                 "content": content,
                 "response": response,
@@ -183,6 +201,12 @@ class LLMClient:
                 model=model,
                 duration_ms=duration_ms,
                 metadata=error_metadata
+            )
+            logger.exception(
+                "chat_completion error service={} model={} duration_ms={:.2f}",
+                self.service_name,
+                model,
+                duration_ms
             )
             
             # Re-raise the exception
@@ -285,6 +309,16 @@ class LLMClient:
         try:
             start_time = time.time()
             model = model or self.model
+            prompt = self._extract_prompt(messages)
+            prompt_preview = (prompt[:120] + "...") if len(prompt) > 120 else prompt
+
+            logger.info(
+                "call_function begin service={} model={} function={} prompt='{}'",
+                self.service_name,
+                model,
+                function_schema["name"],
+                prompt_preview
+            )
 
             response = self.client.chat.completions.create(
                 model=model,
@@ -303,7 +337,6 @@ class LLMClient:
             duration_ms = (time.time() - start_time) * 1000
             tokens_used = self._extract_tokens(response)
 
-            prompt = self._extract_prompt(messages)
             call_metadata = self._merge_metadata(
                 metadata,
                 function=function_schema["name"],
@@ -325,6 +358,15 @@ class LLMClient:
                 tokens_used=tokens_used
             )
 
+            logger.info(
+                "call_function success service={} model={} function={} tokens_used={} duration_ms={:.2f}",
+                self.service_name,
+                model,
+                function_schema["name"],
+                tokens_used,
+                duration_ms
+            )
+
             return {
                 "function_call": function_call,
                 "content": content,
@@ -334,10 +376,15 @@ class LLMClient:
             }
                 
         except Exception as e:
-            logger.error("Function call failed", error=e)
+            logger.exception(
+                "call_function error service={} model={} function={}",
+                self.service_name,
+                model,
+                function_schema["name"]
+            )
             raise
 
 
 # Convenience function to create a client for a service
-def create_llm_client(service_name: str, model: str = "gpt-4") -> LLMClient:
+def create_llm_client(service_name: str, model: str = "gpt-4o-mini") -> LLMClient:
     return LLMClient(service_name=service_name, model=model)
