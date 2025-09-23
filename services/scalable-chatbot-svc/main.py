@@ -85,6 +85,20 @@ class ConnectionManager:
         """Broadcast message to all active connections"""
         for client_id in list(self.active_connections.keys()):
             await self.send_personal_message(message, client_id)
+    
+    async def cleanup_stale_connections(self, timeout_minutes: int = 10):
+        """Clean up connections that haven't been active for specified timeout"""
+        current_time = datetime.now()
+        stale_connections = []
+        
+        for client_id, metadata in self.connection_metadata.items():
+            last_activity = metadata.get("last_activity")
+            if last_activity and (current_time - last_activity).total_seconds() > timeout_minutes * 60:
+                stale_connections.append(client_id)
+        
+        for client_id in stale_connections:
+            print(f"Cleaning up stale connection: {client_id}")
+            self.disconnect(client_id)
 
 
 class RedisManager:
@@ -249,7 +263,21 @@ class StreamingResponse(BaseModel):
 async def startup_event():
     """Initialize services on startup"""
     await redis_manager.connect()
+    
+    # Start background task for cleaning up stale connections
+    asyncio.create_task(cleanup_task())
+    
     print("🚀 Scalable Chatbot Service started - ready for 1000+ concurrent sessions")
+
+
+async def cleanup_task():
+    """Background task to clean up stale connections"""
+    while True:
+        try:
+            await asyncio.sleep(300)  # Run every 5 minutes
+            await manager.cleanup_stale_connections(timeout_minutes=10)
+        except Exception as e:
+            print(f"Error in cleanup task: {e}")
 
 
 @app.on_event("shutdown")
@@ -273,7 +301,16 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: s
             if client_id in manager.connection_metadata:
                 manager.connection_metadata[client_id]["last_activity"] = datetime.now()
             
-            # Process message asynchronously
+            # Handle ping messages for heartbeat
+            if message_data.get("type") == "ping":
+                pong_response = {
+                    "type": "pong",
+                    "timestamp": datetime.now().isoformat()
+                }
+                await manager.send_personal_message(json.dumps(pong_response), client_id)
+                continue
+            
+            # Process chat message asynchronously
             asyncio.create_task(process_chat_message(session_id, message_data, client_id))
             
     except WebSocketDisconnect:

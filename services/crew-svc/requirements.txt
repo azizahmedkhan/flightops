@@ -7,3 +7,4 @@ prometheus-client==0.20.0
 loguru==0.7.2
 openai==1.40.3
 tiktoken==0.7.0
+httpx==0.27.0

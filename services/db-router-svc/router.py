@@ -99,6 +99,21 @@ class QueryRouter:
     def _extract_flight_number(self, text: str) -> Optional[str]:
         """Extract flight number from text using regex."""
         return normalize_flight_number(text)
+
+    def _has_crew_context(self, text: str) -> bool:
+        """Detect if the text is specifically asking about crew details."""
+        crew_keywords = [
+            "crew",
+            "pilot",
+            "captain",
+            "first officer",
+            "flight attendant",
+            "attendant",
+            "cabin crew",
+            "staffing",
+        ]
+        lowered = text.lower()
+        return any(keyword in lowered for keyword in crew_keywords)
     
     def _normalize_city_names(self, text: str) -> str:
         """Normalize city names to IATA codes in text."""
@@ -154,13 +169,18 @@ class QueryRouter:
         
         # Check for flight number pattern first (fast path)
         flight_no = self._extract_flight_number(processed_text)
-        if flight_no:
+        if flight_no and not self._has_crew_context(processed_text):
             logger.debug(f"Detected flight number pattern: {flight_no}")
             return RouteResponse(
                 intent=Intent.FLIGHT_STATUS,
                 args={"flight_no": flight_no, "date": None},
                 confidence=0.95
             )
+        elif flight_no:
+            logger.debug(
+                "Detected flight number pattern but crew context present; deferring to LLM routing"
+            )
+
         
         # Normalize city names to IATA codes
         processed_text = self._normalize_city_names(processed_text)

@@ -169,22 +169,42 @@ async def format_query_answer(
     
     Format this into a clear, helpful response for the user."""
     
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
     try:
-        response = await llm_client.generate_response(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
+        response = await asyncio.to_thread(
+            llm_client.chat_completion,
+            messages=messages,
+            temperature=0.2,
             max_tokens=500,
-            temperature=0.3
+            function_name="format_query_answer",
+            metadata={
+                "intent": intent.value,
+                "row_count": len(rows)
+            }
         )
-        
-        return response.strip()
-        
+
+        if isinstance(response, dict):
+            content = response.get("content", "")
+        else:
+            content = str(response)
+
+        content = content.strip()
+        if content:
+            return content
+
+        raise ValueError("LLM returned empty content")
+
     except Exception as e:
         logger.error(f"Failed to format answer: {e}")
         # Fallback to simple formatting
-        return f"Found {len(rows)} result(s) for your query. Please check the detailed results below."
+        return (
+            f"Found {len(rows)} result(s) for your query. "
+            "Please check the detailed results below."
+        )
 
 
 @app.get("/healthz", response_model=HealthResponse)

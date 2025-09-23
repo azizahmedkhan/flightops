@@ -227,15 +227,15 @@ def mock_asyncpg_pool():
 @pytest.fixture
 def mock_llm_client():
     """Mock LLM client for testing."""
-    client = AsyncMock()
-    client.call_function.return_value = {
+    mock_client = MagicMock()
+    mock_client.call_function = AsyncMock(return_value={
         "function_call": {
             "name": "route_query",
             "arguments": '{"intent": "flight_status", "args": {"flight_no": "NZ278", "date": null}, "confidence": 0.95}'
         }
-    }
-    client.generate_response.return_value = "Flight NZ278 is on time"
-    return client
+    })
+    mock_client.chat_completion = MagicMock(return_value={"content": "Flight NZ278 is on time"})
+    return mock_client
 
 
 @pytest.fixture

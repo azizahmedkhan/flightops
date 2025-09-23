@@ -4,12 +4,13 @@ Provides a single interface for all OpenAI chat completions with built-in loggin
 """
 
 import json
-import time
 import os
+import time
+from typing import Any, Dict, List, Optional, Union
+
 import requests
-from typing import Dict, Any, Optional, List, Union
-from openai import OpenAI
 from loguru import logger
+from openai import OpenAI
 try:
     from .llm_tracker import LLMTracker
 except ImportError:  # pragma: no cover - fallback for path-based imports
@@ -37,6 +38,51 @@ class LLMClient:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
         
         self.client = OpenAI(api_key=self.api_key)
+
+    def _extract_prompt(self, messages: List[Dict[str, str]]) -> str:
+        """Return the first user message content for tracking."""
+        for message in messages:
+            if message.get("role") == "user":
+                return message.get("content", "")
+        return ""
+
+    @staticmethod
+    def _extract_tokens(response: Any) -> Optional[int]:
+        """Safely pull total token usage from an OpenAI response."""
+        usage = getattr(response, "usage", None)
+        return getattr(usage, "total_tokens", None) if usage else None
+
+    @staticmethod
+    def _merge_metadata(base: Optional[Dict[str, Any]], **extra: Any) -> Dict[str, Any]:
+        """Combine tracked metadata while preserving caller-provided fields."""
+        merged: Dict[str, Any] = {
+            **{key: value for key, value in extra.items() if key is not None}
+        }
+        if base:
+            merged.update(base)
+        return merged
+
+    def _track_and_send(
+        self,
+        *,
+        prompt: str,
+        response_text: str,
+        model: str,
+        duration_ms: float,
+        metadata: Optional[Dict[str, Any]] = None,
+        tokens_used: Optional[int] = None
+    ) -> Dict[str, Any]:
+        llm_message = LLMTracker.track_llm_call(
+            service_name=self.service_name,
+            prompt=prompt,
+            response=response_text,
+            model=model,
+            tokens_used=tokens_used,
+            duration_ms=duration_ms,
+            metadata=metadata
+        )
+        self._send_message_to_gateway(llm_message)
+        return llm_message
     
     def _send_message_to_gateway(self, message: Dict[str, Any]) -> None:
         """
@@ -52,10 +98,13 @@ class LLMClient:
                 timeout=5
             )
             if response.status_code != 200:
-                print(f"Warning: Failed to send LLM message to gateway: {response.status_code}")
-        except Exception as e:
+                logger.warning(
+                    "LLM tracking post returned status {status}",
+                    status=response.status_code
+                )
+        except Exception as exc:  # pragma: no cover - defensive path
             # Don't fail the main operation if tracking fails
-            print(f"Warning: Failed to send LLM message to gateway: {e}")
+            logger.warning("Failed to send LLM message to gateway: {error}", error=exc)
     
     def chat_completion(
         self,
@@ -70,17 +119,10 @@ class LLMClient:
         
         start_time = time.time()
         model = model or self.model
-        
-        # Extract prompt for logging (first user message)
-        prompt = ""
-        for message in messages:
-            if message.get("role") == "user":
-                prompt = message.get("content", "")
-                break
+        prompt = self._extract_prompt(messages)
 
-        print(f"DEBUG: LLM message in client: {messages}")
+        logger.debug("LLM request payload", messages=messages, model=model)
 
-        
         try:
             # Make the API call
             response = self.client.chat.completions.create(
@@ -93,64 +135,55 @@ class LLMClient:
             
             # Extract response content
             content = response.choices[0].message.content
-            print(f"DEBUG: LLM response: {content}")
+            logger.debug("LLM response received", content=content)
 
             duration_ms = (time.time() - start_time) * 1000
-            
-            # Prepare tracking metadata
-            tracking_metadata = {
-                "function": function_name,
-                "model": model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **(metadata or {})
-            }
-            
-            # Track the LLM call
-            llm_message = LLMTracker.track_llm_call(
-                service_name=self.service_name,
-                prompt=prompt,
-                response=content,
+
+            tracking_metadata = self._merge_metadata(
+                metadata,
+                function=function_name,
                 model=model,
-                tokens_used=response.usage.total_tokens if response.usage else None,
-                duration_ms=duration_ms,
-                metadata=tracking_metadata
+                temperature=temperature,
+                max_tokens=max_tokens
             )
-            
-            # Send the tracked message to the gateway API
-            self._send_message_to_gateway(llm_message)
-            
+
+            tokens_used = self._extract_tokens(response)
+
+            llm_message = self._track_and_send(
+                prompt=prompt,
+                response_text=content or "",
+                model=model,
+                duration_ms=duration_ms,
+                metadata=tracking_metadata,
+                tokens_used=tokens_used
+            )
+
             return {
                 "content": content,
                 "response": response,
                 "llm_message": llm_message,
-                "tokens_used": response.usage.total_tokens if response.usage else None,
+                "tokens_used": tokens_used,
                 "duration_ms": duration_ms
             }
             
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             
-            # Track the error
-            error_metadata = {
-                "function": function_name,
-                "error": True,
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                **(metadata or {})
-            }
-            
-            error_message = LLMTracker.track_llm_call(
-                service_name=self.service_name,
+            error_metadata = self._merge_metadata(
+                metadata,
+                function=function_name,
+                error=True,
+                error_type=type(e).__name__,
+                error_message=str(e)
+            )
+
+            self._track_and_send(
                 prompt=prompt,
-                response=f"Error: {str(e)}",
+                response_text=f"Error: {e}",
                 model=model,
                 duration_ms=duration_ms,
                 metadata=error_metadata
             )
-            
-            # Send the error message to the gateway API
-            self._send_message_to_gateway(error_message)
             
             # Re-raise the exception
             raise e
@@ -186,8 +219,7 @@ class LLMClient:
                 "tokens_used": result["tokens_used"],
                 "duration_ms": result["duration_ms"]
             }
-        else:
-            return result["content"]
+        return result["content"]
     
     def json_completion(
         self,
@@ -253,8 +285,7 @@ class LLMClient:
         try:
             start_time = time.time()
             model = model or self.model
-            
-            # Make the API call directly with function calling
+
             response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -264,52 +295,46 @@ class LLMClient:
                 function_call={"name": function_schema["name"]},
                 **kwargs
             )
-            
-            # Extract response
+
             message = response.choices[0].message
-            content = message.content
+            content = message.content or ""
             function_call = message.function_call
-            
+
             duration_ms = (time.time() - start_time) * 1000
-            
-            # Prepare tracking metadata
-            tracking_metadata = {
-                "function": function_schema["name"],
-                "model": model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                **(metadata or {})
-            }
-            
-            # Create LLM message for tracking
-            llm_message = {
-                "service": self.service_name,
-                "model": model,
-                "prompt": messages[-1].get("content", "") if messages else "",
-                "response": content or "",
-                "function_call": {
+            tokens_used = self._extract_tokens(response)
+
+            prompt = self._extract_prompt(messages)
+            call_metadata = self._merge_metadata(
+                metadata,
+                function=function_schema["name"],
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                function_call={
                     "name": function_call.name,
                     "arguments": function_call.arguments
-                } if function_call else None,
-                "tokens_used": response.usage.total_tokens if response.usage else 0,
-                "duration_ms": duration_ms,
-                "metadata": tracking_metadata,
-                "timestamp": time.time()
-            }
-            
-            # Send to gateway for tracking
-            self._send_message_to_gateway(llm_message)
-            
+                } if function_call else None
+            )
+
+            llm_message = self._track_and_send(
+                prompt=prompt,
+                response_text=content,
+                model=model,
+                duration_ms=duration_ms,
+                metadata=call_metadata,
+                tokens_used=tokens_used
+            )
+
             return {
                 "function_call": function_call,
                 "content": content,
                 "llm_message": llm_message,
-                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "tokens_used": tokens_used,
                 "duration_ms": duration_ms
             }
                 
         except Exception as e:
-            logger.error(f"Function call failed: {e}")
+            logger.error("Function call failed", error=e)
             raise
 
 

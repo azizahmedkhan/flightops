@@ -265,8 +265,15 @@ class TestAnswerFormatting:
         """Test successful answer formatting."""
         from ..main import format_query_answer
         
-        mock_llm_client = AsyncMock()
-        mock_llm_client.generate_response.return_value = "Flight NZ278 is on time"
+        class DummyLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def chat_completion(self, **kwargs):
+                self.calls += 1
+                return {"content": "Flight NZ278 is on time"}
+
+        mock_llm_client = DummyLLM()
         
         result = await format_query_answer(
             Intent.FLIGHT_STATUS,
@@ -276,14 +283,22 @@ class TestAnswerFormatting:
         )
         
         assert result == "Flight NZ278 is on time"
-        mock_llm_client.generate_response.assert_called_once()
+        assert mock_llm_client.calls == 1
     
     @pytest.mark.asyncio
     async def test_format_query_answer_no_results(self):
         """Test answer formatting with no results."""
         from ..main import format_query_answer
         
-        mock_llm_client = AsyncMock()
+        class DummyLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def chat_completion(self, **kwargs):
+                self.calls += 1
+                return {"content": "Should not be called"}
+
+        mock_llm_client = DummyLLM()
         
         result = await format_query_answer(
             Intent.FLIGHT_STATUS,
@@ -293,15 +308,22 @@ class TestAnswerFormatting:
         )
         
         assert result == "No results found for your query."
-        mock_llm_client.generate_response.assert_not_called()
+        assert mock_llm_client.calls == 0
     
     @pytest.mark.asyncio
     async def test_format_query_answer_llm_failure(self):
         """Test answer formatting when LLM fails."""
         from ..main import format_query_answer
         
-        mock_llm_client = AsyncMock()
-        mock_llm_client.generate_response.side_effect = Exception("LLM error")
+        class DummyLLM:
+            def __init__(self):
+                self.calls = 0
+
+            def chat_completion(self, **kwargs):
+                self.calls += 1
+                raise Exception("LLM error")
+
+        mock_llm_client = DummyLLM()
         
         result = await format_query_answer(
             Intent.FLIGHT_STATUS,

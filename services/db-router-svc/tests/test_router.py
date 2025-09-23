@@ -76,11 +76,36 @@ class TestQueryRouter:
     async def test_route_query_flight_number_detection(self, query_router):
         """Test that flight numbers are detected and routed correctly."""
         response = await query_router.route_query("What's the status of NZ278?")
-        
+
         assert response.intent == Intent.FLIGHT_STATUS
         assert response.args["flight_no"] == "NZ278"
         assert response.confidence == 0.95
-    
+
+    @pytest.mark.asyncio
+    async def test_route_query_flight_number_with_crew_context(self, query_router, mock_llm_client):
+        """Flight queries mentioning crew should defer to LLM routing."""
+        mock_llm_client.call_function.return_value = {
+            "function_call": {
+                "name": "route_query",
+                "arguments": json.dumps({
+                    "intent": "crew_for_flight",
+                    "args": {
+                        "flight_no": "NZ278",
+                        "date": "2024-01-15"
+                    },
+                    "confidence": 0.88
+                })
+            }
+        }
+
+        response = await query_router.route_query("Who is the crew for NZ278 on 15 Jan 2024?")
+
+        assert response.intent == Intent.CREW_FOR_FLIGHT
+        assert response.args["flight_no"] == "NZ278"
+        assert response.args["date"] == "2024-01-15"
+        assert response.confidence == 0.88
+        mock_llm_client.call_function.assert_called_once()
+
     @pytest.mark.asyncio
     async def test_route_query_llm_routing(self, query_router, mock_llm_client):
         """Test LLM-based query routing."""
