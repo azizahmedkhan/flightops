@@ -2,7 +2,7 @@ import sys
 import os
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -87,6 +87,24 @@ class CrewSwap(BaseModel):
     cost_impact: float
     implementation_time: str
 
+
+def _parse_date(value: str) -> date:
+    """Parse inbound dates into date objects."""
+    if isinstance(value, date):
+        return value
+
+    value = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError as exc:
+        raise ValueError(f"Invalid date value: {value}") from exc
+
 def get_crew_qualifications(crew_id: str) -> List[str]:
     """Get crew member qualifications and certifications"""
     # Mock qualifications - in production, integrate with crew management system
@@ -101,6 +119,7 @@ def get_crew_qualifications(crew_id: str) -> List[str]:
 
 def calculate_duty_hours(crew_id: str, date: str) -> Dict[str, Any]:
     """Calculate current duty hours and rest requirements"""
+    flight_dt = _parse_date(date)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get crew's flights for the day
@@ -110,7 +129,7 @@ def calculate_duty_hours(crew_id: str, date: str) -> Dict[str, Any]:
                 JOIN flights f ON cr.flight_no = f.flight_no AND cr.flight_date = f.flight_date
                 WHERE cr.crew_id = %s AND cr.flight_date = %s
                 ORDER BY f.sched_dep_time
-            """, (crew_id, date))
+            """, (crew_id, flight_dt))
             flights = cur.fetchall()
             
             # Calculate duty hours (simplified)
@@ -281,6 +300,7 @@ def optimize_crew_assignments(req: CrewOptimizationRequest, request: Request):
     """Optimize crew assignments for a flight"""
     with LATENCY.labels("crew-svc", "/optimize_crew", "POST").time():
         try:
+            flight_dt = _parse_date(req.date)
             # Get current crew for the flight
             with db_pool.connection() as conn:
                 with conn.cursor() as cur:
@@ -290,7 +310,7 @@ def optimize_crew_assignments(req: CrewOptimizationRequest, request: Request):
                         LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
                         WHERE cr.flight_no = %s AND cr.flight_date = %s
                         ORDER BY cr.crew_role
-                    """, (req.flight_no, req.date))
+                    """, (req.flight_no, flight_dt))
                     crew_rows = cur.fetchall()
             
             # Analyze each crew member
@@ -358,6 +378,7 @@ def suggest_crew_swap(req: CrewSwapRequest, request: Request):
     """Suggest crew replacement for unavailable crew member"""
     with LATENCY.labels("crew-svc", "/suggest_crew_swap", "POST").time():
         try:
+            flight_dt = _parse_date(req.date)
             # Get unavailable crew details
             with db_pool.connection() as conn:
                 with conn.cursor() as cur:
@@ -366,7 +387,7 @@ def suggest_crew_swap(req: CrewSwapRequest, request: Request):
                         FROM crew_roster cr
                         LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
                         WHERE cr.crew_id = %s AND cr.flight_no = %s AND cr.flight_date = %s
-                    """, (req.unavailable_crew_id, req.flight_no, req.date))
+                    """, (req.unavailable_crew_id, req.flight_no, flight_dt))
                     result = cur.fetchone()
                     
                     if not result:

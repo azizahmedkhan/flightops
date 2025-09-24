@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -41,6 +42,103 @@ llm_client = create_llm_client("agent-svc", CHAT_MODEL)
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
 db_pool = None
 
+
+def _column_type(conn, table: str, column: str) -> Optional[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+            """,
+            (table, column),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+def _alter_column(conn, table: str, column: str, target_type: str, expression: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {target_type} USING {expression}"
+        )
+
+
+def _migrate_schedule_columns():
+    """Ensure schedule-related columns use DATE/TIMESTAMP types."""
+    if not db_pool:
+        return
+
+    migrations = [
+        (
+            "flights",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "bookings",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "crew_roster",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "flights",
+            "sched_dep_time",
+            "timestamp without time zone",
+            "CASE "
+            "WHEN sched_dep_time IS NULL OR sched_dep_time = '' THEN NULL "
+            "WHEN sched_dep_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
+            "THEN (flight_date::text || ' ' || sched_dep_time)::timestamp "
+            "ELSE NULLIF(sched_dep_time, '')::timestamp "
+            "END",
+        ),
+        (
+            "flights",
+            "sched_arr_time",
+            "timestamp without time zone",
+            "CASE "
+            "WHEN sched_arr_time IS NULL OR sched_arr_time = '' THEN NULL "
+            "WHEN sched_arr_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
+            "THEN (flight_date::text || ' ' || sched_arr_time)::timestamp "
+            "ELSE NULLIF(sched_arr_time, '')::timestamp "
+            "END",
+        ),
+    ]
+
+    with db_pool.connection() as conn:
+        conn.autocommit = False
+        for table, column, target_type, expression in migrations:
+            current = _column_type(conn, table, column)
+            if current is None or current == target_type:
+                continue
+
+            try:
+                _alter_column(conn, table, column, target_type, expression)
+                conn.commit()
+                service.logger.info(
+                    "agent-svc migrated %s.%s from %s to %s",
+                    table,
+                    column,
+                    current,
+                    target_type,
+                )
+            except Exception as exc:
+                service.logger.warning(
+                    "agent-svc failed to migrate %s.%s to %s: %s",
+                    table,
+                    column,
+                    target_type,
+                    exc,
+                )
+                conn.rollback()
+
 @asynccontextmanager
 async def lifespan(app):
     global db_pool
@@ -48,6 +146,7 @@ async def lifespan(app):
     
     # Initialize connection pool
     db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
+    _migrate_schedule_columns()
     
     yield
     
@@ -63,6 +162,30 @@ class Ask(BaseModel):
     flight_no: str
     date: str
 
+
+def _parse_date(value: str) -> date:
+    """Parse incoming string dates into date objects."""
+    if isinstance(value, date):
+        return value
+
+    value = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError as exc:
+        raise ValueError(f"Invalid date value: {value}") from exc
+
+
+def _iso_or_none(value: Optional[Any]) -> Optional[str]:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
 def pii_scrub(text: str) -> str:
     import re
     text = re.sub(r"[A-Z0-9]{6}(?=\b)", "[PNR]", text)
@@ -71,20 +194,22 @@ def pii_scrub(text: str) -> str:
     return text
 
 def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
+    flight_dt = _parse_date(date)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
                 FROM flights
                 WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, date))
+            """, (flight_no, flight_dt))
             row = cur.fetchone()
             if not row:
                 return {}
             return {"flight_no":row[0], "origin":row[1], "destination":row[2],
-                    "sched_dep":row[3], "sched_arr":row[4], "status":row[5], "tail_number":row[6]}
+                    "sched_dep":_iso_or_none(row[3]), "sched_arr":_iso_or_none(row[4]), "status":row[5], "tail_number":row[6]}
 
 def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
+    flight_dt = _parse_date(date)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             # Get passenger count and connection details
@@ -92,7 +217,7 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
                 SELECT COUNT(*), COUNT(CASE WHEN has_connection = 'TRUE' THEN 1 END)
                 FROM bookings
                 WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, date))
+            """, (flight_no, flight_dt))
             pax_data = cur.fetchone()
             pax = pax_data[0]
             connecting_pax = pax_data[1]
@@ -102,7 +227,7 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
                 SELECT COUNT(*), STRING_AGG(DISTINCT crew_role, ', ')
                 FROM crew_roster
                 WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, date))
+            """, (flight_no, flight_dt))
             crew_data = cur.fetchone()
             crew = crew_data[0]
             crew_roles = crew_data[1] or "Unknown"
@@ -113,7 +238,7 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
                 FROM flights f
                 LEFT JOIN aircraft_status a ON f.tail_number = a.tail_number
                 WHERE f.flight_no=%s AND f.flight_date=%s
-            """, (flight_no, date))
+            """, (flight_no, flight_dt))
             aircraft_data = cur.fetchone()
             aircraft_status = aircraft_data[1] if aircraft_data else "Unknown"
             aircraft_location = aircraft_data[2] if aircraft_data else "Unknown"
@@ -130,6 +255,7 @@ def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
 
 def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Get detailed crew information for a flight."""
+    flight_dt = _parse_date(date)
     with db_pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -138,7 +264,7 @@ def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
                 LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
                 WHERE cr.flight_no=%s AND cr.flight_date=%s
                 ORDER BY cr.crew_role
-            """, (flight_no, date))
+            """, (flight_no, flight_dt))
             crew_members = []
             for row in cur.fetchall():
                 crew_members.append({

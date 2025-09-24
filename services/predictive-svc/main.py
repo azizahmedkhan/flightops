@@ -2,7 +2,7 @@ import sys
 import os
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -74,6 +74,27 @@ async def lifespan(app):
 
 # Set lifespan for the app
 app.router.lifespan_context = lifespan
+
+
+def _parse_date(value: Optional[str]) -> Optional[date]:
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, date):
+        return value
+
+    value = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError as exc:
+        raise ValueError(f"Invalid date value: {value}") from exc
+
 
 def get_weather_data(airport: str, date: str) -> Dict[str, Any]:
     """Mock weather data - in production, integrate with weather API"""
@@ -286,6 +307,10 @@ def predict_disruptions(req: PredictionRequest, request: Request):
         try:
             flight_no = req.flight_no
             date = req.date
+            flight_dt = _parse_date(date) if date else None
+
+            if not flight_no or not flight_dt:
+                raise HTTPException(status_code=400, detail="flight_no and date are required")
             
             # Get flight data
             with db_pool.connection() as conn:
@@ -294,7 +319,7 @@ def predict_disruptions(req: PredictionRequest, request: Request):
                         SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
                         FROM flights
                         WHERE flight_no = %s AND flight_date = %s
-                    """, (flight_no, date))
+                    """, (flight_no, flight_dt))
                     flight_row = cur.fetchone()
                     
                     if not flight_row:
@@ -308,11 +333,11 @@ def predict_disruptions(req: PredictionRequest, request: Request):
                         "sched_arr_time": flight_row[4],
                         "status": flight_row[5],
                         "tail_number": flight_row[6],
-                        "date": date
+                        "date": flight_dt.isoformat()
                     }
-            
+
             # Gather analysis data
-            weather_data = get_weather_data(flight_data["origin"], date) if req.include_weather else {}
+            weather_data = get_weather_data(flight_data["origin"], flight_data["date"]) if req.include_weather else {}
             
             crew_analysis = {"risk_level": "low", "factors": [], "total_crew": 0, "at_risk_crew": 0}
             if req.include_crew:
@@ -324,7 +349,7 @@ def predict_disruptions(req: PredictionRequest, request: Request):
                             FROM crew_roster cr
                             LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
                             WHERE cr.flight_no = %s AND cr.flight_date = %s
-                        """, (flight_no, date))
+                        """, (flight_no, flight_dt))
                         crew_details = []
                         for row in cur.fetchall():
                             crew_details.append({
@@ -349,7 +374,7 @@ def predict_disruptions(req: PredictionRequest, request: Request):
             # Create prediction response
             prediction = DisruptionPrediction(
                 flight_no=flight_no,
-                date=date,
+                date=flight_dt.isoformat(),
                 risk_level=insights.get("risk_level", "low"),
                 risk_score=insights.get("risk_score", 0.0),
                 predicted_disruption_type=insights.get("predicted_disruption_type", "No disruption expected"),
@@ -376,8 +401,8 @@ def bulk_predict_disruptions(request: Request):
     """Predict disruptions for all flights in the next 24 hours"""
     with LATENCY.labels("predictive-svc", "/bulk_predict", "POST").time():
         try:
-            tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-            
+            tomorrow_date = (datetime.now() + timedelta(days=1)).date()
+
             # Get all flights for tomorrow
             with db_pool.connection() as conn:
                 with conn.cursor() as cur:
@@ -386,9 +411,9 @@ def bulk_predict_disruptions(request: Request):
                         FROM flights
                         WHERE flight_date = %s
                         ORDER BY sched_dep_time
-                    """, (tomorrow,))
+                    """, (tomorrow_date,))
                     flights = cur.fetchall()
-            
+
             predictions = []
             for flight in flights:
                 flight_no, origin, destination, sched_dep_time, status, tail_number = flight
@@ -403,7 +428,7 @@ def bulk_predict_disruptions(request: Request):
                     factors.append("Already disrupted")
                 
                 # Check weather at origin
-                weather = get_weather_data(origin, tomorrow)
+                weather = get_weather_data(origin, tomorrow_date.isoformat())
                 if weather.get("wind_speed", 0) > 25:
                     risk_score += 0.3
                     factors.append("High wind at origin")
@@ -429,7 +454,7 @@ def bulk_predict_disruptions(request: Request):
             predictions.sort(key=lambda x: x["risk_score"], reverse=True)
             
             service.log_request(request, {"status": "success", "predictions_count": len(predictions)})
-            return {"predictions": predictions, "date": tomorrow}
+            return {"predictions": predictions, "date": tomorrow_date.isoformat()}
             
         except Exception as e:
             service.log_error(e, "bulk_predict endpoint")

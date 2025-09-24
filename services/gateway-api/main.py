@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime, date, time
 from typing import List, Dict, Any, Optional
 
 import httpx
@@ -186,17 +187,186 @@ def execute_delete(query: str, params: tuple) -> int:
     return _execute_with_recovery(run)
 
 
+def _coerce_date(value: Any) -> Optional[date]:
+    """Convert incoming values to date objects."""
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, date):
+        return value
+
+    value_str = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value_str, fmt).date()
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(value_str).date()
+    except ValueError as exc:
+        raise ValueError(f"Invalid date value: {value_str}") from exc
+
+
+def _coerce_time(value: Any) -> Optional[time]:
+    """Convert various time representations into a time object."""
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, time):
+        return value
+
+    value_str = str(value).strip()
+
+    try:
+        parsed_dt = datetime.fromisoformat(value_str.replace("Z", "+00:00"))
+        return parsed_dt.time()
+    except ValueError:
+        pass
+
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(value_str, fmt).time()
+        except ValueError:
+            continue
+
+    raise ValueError(f"Invalid time value: {value_str}")
+
+
+def _coerce_timestamp(value: Any, fallback_date: Optional[date] = None) -> Optional[datetime]:
+    """Normalize timestamp values, allowing pure times when a date is supplied."""
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    value_str = str(value).strip()
+
+    try:
+        return datetime.fromisoformat(value_str.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+
+    time_value = _coerce_time(value_str)
+    if fallback_date:
+        return datetime.combine(fallback_date, time_value)
+
+    raise ValueError(f"Invalid timestamp value: {value_str}")
+
+
+def _serialize_temporal_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert date and datetime objects to ISO strings for JSON responses."""
+    serialized = dict(row)
+    for field in ("flight_date", "duty_start_time"):
+        value = serialized.get(field)
+        if isinstance(value, (date, datetime)):
+            serialized[field] = value.isoformat()
+
+    for field in ("sched_dep_time", "sched_arr_time"):
+        value = serialized.get(field)
+        if isinstance(value, datetime):
+            serialized[field] = value.isoformat()
+
+    return serialized
+
+
+def _column_type(conn, table: str, column: str) -> Optional[str]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+            """,
+            (table, column),
+        )
+        result = cur.fetchone()
+        return result[0] if result else None
+
+
+def _alter_column(conn, table: str, column: str, target_type: str, expression: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {target_type} USING {expression}"
+        )
+
+
+def _migrate_legacy_columns(conn) -> None:
+    """Upgrade legacy TEXT-based schedule columns to DATE/TIMESTAMP."""
+    migrations = [
+        (
+            "flights",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "bookings",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "crew_roster",
+            "flight_date",
+            "date",
+            "NULLIF(flight_date, '')::date",
+        ),
+        (
+            "flights",
+            "sched_dep_time",
+            "timestamp without time zone",
+            "CASE "
+            "WHEN sched_dep_time IS NULL OR sched_dep_time = '' THEN NULL "
+            "WHEN sched_dep_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
+            "THEN (flight_date::text || ' ' || sched_dep_time)::timestamp "
+            "ELSE NULLIF(sched_dep_time, '')::timestamp "
+            "END",
+        ),
+        (
+            "flights",
+            "sched_arr_time",
+            "timestamp without time zone",
+            "CASE "
+            "WHEN sched_arr_time IS NULL OR sched_arr_time = '' THEN NULL "
+            "WHEN sched_arr_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
+            "THEN (flight_date::text || ' ' || sched_arr_time)::timestamp "
+            "ELSE NULLIF(sched_arr_time, '')::timestamp "
+            "END",
+        ),
+    ]
+
+    for table, column, target_type, expression in migrations:
+        current = _column_type(conn, table, column)
+        if current is None or current == target_type:
+            continue
+
+        try:
+            _alter_column(conn, table, column, target_type, expression)
+            service.logger.info(
+                "Migrated %s.%s from %s to %s", table, column, current, target_type
+            )
+        except Exception as exc:
+            service.logger.warning(
+                "Failed to migrate %s.%s to %s: %s", table, column, target_type, exc
+            )
+            conn.rollback()
+        else:
+            conn.commit()
+
+
 def ensure_tables_exist() -> None:
     """Ensure core data tables exist so read endpoints do not 500 on fresh databases."""
     create_statements = [
         """
         CREATE TABLE IF NOT EXISTS flights (
             flight_no TEXT,
-            flight_date TEXT,
+            flight_date DATE,
             origin TEXT,
             destination TEXT,
-            sched_dep_time TEXT,
-            sched_arr_time TEXT,
+            sched_dep_time TIMESTAMP,
+            sched_arr_time TIMESTAMP,
             status TEXT,
             tail_number TEXT
         )
@@ -204,7 +374,7 @@ def ensure_tables_exist() -> None:
         """
         CREATE TABLE IF NOT EXISTS bookings (
             flight_no TEXT,
-            flight_date TEXT,
+            flight_date DATE,
             pnr TEXT,
             passenger_name TEXT,
             has_connection TEXT,
@@ -214,7 +384,7 @@ def ensure_tables_exist() -> None:
         """
         CREATE TABLE IF NOT EXISTS crew_roster (
             flight_no TEXT,
-            flight_date TEXT,
+            flight_date DATE,
             crew_id TEXT,
             crew_role TEXT
         )
@@ -252,9 +422,12 @@ def ensure_tables_exist() -> None:
     ]
 
     with get_db_connection() as conn:
+        conn.autocommit = False
         with conn.cursor() as cur:
             for statement in create_statements:
                 cur.execute(statement)
+        conn.commit()
+        _migrate_legacy_columns(conn)
 
 
 # Database schema will be initialized in the lifespan function after connection pool is ready
@@ -480,7 +653,8 @@ async def test_customer_chat(request: Request):
 @app.get("/data/flights")
 async def get_flights(request: Request):
     try:
-        flights = execute_query("SELECT * FROM flights ORDER BY flight_date, flight_no")
+        rows = execute_query("SELECT * FROM flights ORDER BY flight_date, flight_no")
+        flights = [_serialize_temporal_fields(row) for row in rows]
         service.log_request(request, {"status": "success", "count": len(flights)})
         return flights
     except Exception as e:
@@ -490,15 +664,32 @@ async def get_flights(request: Request):
 @app.post("/data/flights")
 async def create_flight(flight: Flight, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(flight.flight_date)
+            sched_dep_time = _coerce_timestamp(flight.sched_dep_time, flight_date)
+            sched_arr_time = _coerce_timestamp(flight.sched_arr_time, flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             INSERT INTO flights (flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status, tail_number)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        params = (flight.flight_no, flight.flight_date, flight.origin, flight.destination, 
-                 flight.sched_dep_time, flight.sched_arr_time, flight.status, flight.tail_number)
+        params = (
+            flight.flight_no,
+            flight_date,
+            flight.origin,
+            flight.destination,
+            sched_dep_time,
+            sched_arr_time,
+            flight.status,
+            flight.tail_number,
+        )
         execute_insert(query, params)
         service.log_request(request, {"status": "success"})
         return {"message": "Flight created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         service.log_error(e, "create_flight endpoint")
         raise HTTPException(status_code=500, detail=str(e))
@@ -506,12 +697,27 @@ async def create_flight(flight: Flight, request: Request):
 @app.put("/data/flights/{flight_no}")
 async def update_flight(flight_no: str, flight: Flight, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(flight.flight_date)
+            sched_dep_time = _coerce_timestamp(flight.sched_dep_time, flight_date)
+            sched_arr_time = _coerce_timestamp(flight.sched_arr_time, flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             UPDATE flights SET flight_date=%s, origin=%s, destination=%s, sched_dep_time=%s, 
                    sched_arr_time=%s, status=%s, tail_number=%s WHERE flight_no=%s
         """
-        params = (flight.flight_date, flight.origin, flight.destination, flight.sched_dep_time,
-                 flight.sched_arr_time, flight.status, flight.tail_number, flight_no)
+        params = (
+            flight_date,
+            flight.origin,
+            flight.destination,
+            sched_dep_time,
+            sched_arr_time,
+            flight.status,
+            flight.tail_number,
+            flight_no,
+        )
         rows_affected = execute_update(query, params)
         if rows_affected == 0:
             raise HTTPException(status_code=404, detail="Flight not found")
@@ -542,7 +748,8 @@ async def delete_flight(flight_no: str, request: Request):
 @app.get("/data/bookings")
 async def get_bookings(request: Request):
     try:
-        bookings = execute_query("SELECT * FROM bookings ORDER BY flight_date, flight_no")
+        rows = execute_query("SELECT * FROM bookings ORDER BY flight_date, flight_no")
+        bookings = [_serialize_temporal_fields(row) for row in rows]
         service.log_request(request, {"status": "success", "count": len(bookings)})
         return bookings
     except Exception as e:
@@ -552,15 +759,28 @@ async def get_bookings(request: Request):
 @app.post("/data/bookings")
 async def create_booking(booking: Booking, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(booking.flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             INSERT INTO bookings (flight_no, flight_date, pnr, passenger_name, has_connection, connecting_flight_no)
             VALUES (%s, %s, %s, %s, %s, %s)
         """
-        params = (booking.flight_no, booking.flight_date, booking.pnr, booking.passenger_name,
-                 booking.has_connection, booking.connecting_flight_no)
+        params = (
+            booking.flight_no,
+            flight_date,
+            booking.pnr,
+            booking.passenger_name,
+            booking.has_connection,
+            booking.connecting_flight_no,
+        )
         execute_insert(query, params)
         service.log_request(request, {"status": "success"})
         return {"message": "Booking created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         service.log_error(e, "create_booking endpoint")
         raise HTTPException(status_code=500, detail=str(e))
@@ -568,12 +788,23 @@ async def create_booking(booking: Booking, request: Request):
 @app.put("/data/bookings/{pnr}")
 async def update_booking(pnr: str, booking: Booking, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(booking.flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             UPDATE bookings SET flight_no=%s, flight_date=%s, passenger_name=%s, 
                    has_connection=%s, connecting_flight_no=%s WHERE pnr=%s
         """
-        params = (booking.flight_no, booking.flight_date, booking.passenger_name,
-                 booking.has_connection, booking.connecting_flight_no, pnr)
+        params = (
+            booking.flight_no,
+            flight_date,
+            booking.passenger_name,
+            booking.has_connection,
+            booking.connecting_flight_no,
+            pnr,
+        )
         rows_affected = execute_update(query, params)
         if rows_affected == 0:
             raise HTTPException(status_code=404, detail="Booking not found")
@@ -604,7 +835,8 @@ async def delete_booking(pnr: str, request: Request):
 @app.get("/data/crew_roster")
 async def get_crew_roster(request: Request):
     try:
-        roster = execute_query("SELECT * FROM crew_roster ORDER BY flight_date, flight_no")
+        rows = execute_query("SELECT * FROM crew_roster ORDER BY flight_date, flight_no")
+        roster = [_serialize_temporal_fields(row) for row in rows]
         service.log_request(request, {"status": "success", "count": len(roster)})
         return roster
     except Exception as e:
@@ -614,14 +846,21 @@ async def get_crew_roster(request: Request):
 @app.post("/data/crew_roster")
 async def create_crew_roster(roster: CrewRoster, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(roster.flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             INSERT INTO crew_roster (flight_no, flight_date, crew_id, crew_role)
             VALUES (%s, %s, %s, %s)
         """
-        params = (roster.flight_no, roster.flight_date, roster.crew_id, roster.crew_role)
+        params = (roster.flight_no, flight_date, roster.crew_id, roster.crew_role)
         execute_insert(query, params)
         service.log_request(request, {"status": "success"})
         return {"message": "Crew roster entry created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         service.log_error(e, "create_crew_roster endpoint")
         raise HTTPException(status_code=500, detail=str(e))
@@ -629,10 +868,15 @@ async def create_crew_roster(roster: CrewRoster, request: Request):
 @app.put("/data/crew_roster/{flight_no}/{crew_id}")
 async def update_crew_roster(flight_no: str, crew_id: str, roster: CrewRoster, request: Request):
     try:
+        try:
+            flight_date = _coerce_date(roster.flight_date)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         query = """
             UPDATE crew_roster SET flight_date=%s, crew_role=%s WHERE flight_no=%s AND crew_id=%s
         """
-        params = (roster.flight_date, roster.crew_role, flight_no, crew_id)
+        params = (flight_date, roster.crew_role, flight_no, crew_id)
         rows_affected = execute_update(query, params)
         if rows_affected == 0:
             raise HTTPException(status_code=404, detail="Crew roster entry not found")

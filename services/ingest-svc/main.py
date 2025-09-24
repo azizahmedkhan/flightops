@@ -6,7 +6,8 @@ import json
 import re
 import yaml
 from contextlib import asynccontextmanager
-from typing import Dict, List, Tuple, Optional
+from datetime import datetime, date, time
+from typing import Dict, List, Tuple, Optional, Any
 
 import psycopg
 from fastapi import Request
@@ -130,10 +131,66 @@ async def lifespan(app):
 # Set lifespan for the app
 app.router.lifespan_context = lifespan
 
+def _parse_date(value: Any) -> Optional[date]:
+    """Convert incoming CSV value into a date object."""
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, date):
+        return value
+
+    value_str = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(value_str, fmt).date()
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(value_str).date()
+    except ValueError:
+        service.logger.warning("Unable to parse date value '%s'; defaulting to None", value_str)
+        return None
+
+
+def _parse_time(value: Any) -> Optional[time]:
+    """Parse a time string into a time object."""
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, time):
+        return value
+
+    value_str = str(value).strip()
+
+    # Handle full timestamp strings by extracting the time component
+    try:
+        dt = datetime.fromisoformat(value_str.replace("Z", "+00:00"))
+        return dt.time()
+    except ValueError:
+        pass
+
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            return datetime.strptime(value_str, fmt).time()
+        except ValueError:
+            continue
+
+    service.logger.warning("Unable to parse time value '%s'; defaulting to midnight", value_str)
+    return time(0, 0)
+
+
+def _combine_datetime(flight_dt: Optional[date], time_value: Optional[time]) -> Optional[datetime]:
+    """Combine a flight date with a clock time into a naive datetime."""
+    if not flight_dt or not time_value:
+        return None
+    return datetime.combine(flight_dt, time_value)
+
+
 def parse_csv_files() -> Dict[str, int]:
     """Parse CSV files and return counts of loaded records."""
     counts = {}
-    
+
     with db_pool.connection() as conn:
         conn.autocommit = True
         with conn.cursor() as cur:
@@ -143,22 +200,23 @@ def parse_csv_files() -> Dict[str, int]:
             cur.execute("DROP TABLE IF EXISTS crew_roster CASCADE")
             cur.execute("DROP TABLE IF EXISTS crew_details CASCADE")
             cur.execute("DROP TABLE IF EXISTS aircraft_status CASCADE")
-            
+
             # Create tables with new structure
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE flights(
                     flight_no TEXT,
-                    flight_date TEXT,
+                    flight_date DATE,
                     origin TEXT,
                     destination TEXT,
-                    sched_dep_time TEXT,
-                    sched_arr_time TEXT,
+                    sched_dep_time TIMESTAMP,
+                    sched_arr_time TIMESTAMP,
                     status TEXT,
                     tail_number TEXT
                 );
                 CREATE TABLE bookings(
                     flight_no TEXT,
-                    flight_date TEXT,
+                    flight_date DATE,
                     pnr TEXT,
                     passenger_name TEXT,
                     has_connection TEXT,
@@ -166,7 +224,7 @@ def parse_csv_files() -> Dict[str, int]:
                 );
                 CREATE TABLE crew_roster(
                     flight_no TEXT,
-                    flight_date TEXT,
+                    flight_date DATE,
                     crew_id TEXT,
                     crew_role TEXT
                 );
@@ -181,31 +239,85 @@ def parse_csv_files() -> Dict[str, int]:
                     current_location TEXT,
                     status TEXT
                 );
-            """)
-            
-            # Load each CSV
-            for table_name in ["flights", "bookings", "crew_roster", "crew_details", "aircraft_status"]:
+            """
+            )
+
+            def load_csv(table_name: str, processor):
                 path = f"{DATA_DIR}/csv/{table_name}.csv"
-                if os.path.exists(path):
-                    with open(path, newline='') as f:
-                        reader = csv.DictReader(f)
-                        rows = [tuple(d.values()) for d in reader]
-                    
-                    # Clear existing data
-                    cur.execute(f"DELETE FROM {table_name}")
-                    
-                    # Insert new data
-                    if rows:
-                        placeholders = ",".join(["(" + ",".join(["%s"]*len(rows[0])) + ")"]*len(rows))
-                        flat = [x for row in rows for x in row]
-                        cur.execute(f"INSERT INTO {table_name} VALUES {placeholders}", flat)
-                        counts[table_name] = len(rows)
-                    else:
-                        counts[table_name] = 0
-                else:
+                if not os.path.exists(path):
                     service.log_error(f"CSV file not found: {path}", "parse_csv_files")
                     counts[table_name] = 0
-    
+                    return
+
+                with open(path, newline='') as f:
+                    reader = csv.DictReader(f)
+                    processed_rows = [processor(row) for row in reader]
+
+                cur.execute(f"DELETE FROM {table_name}")
+
+                if processed_rows:
+                    column_count = len(processed_rows[0])
+                    placeholders = ",".join(["(" + ",".join(["%s"] * column_count) + ")"] * len(processed_rows))
+                    flat_values = [value for row in processed_rows for value in row]
+                    cur.execute(f"INSERT INTO {table_name} VALUES {placeholders}", flat_values)
+
+                counts[table_name] = len(processed_rows)
+
+            load_csv(
+                "flights",
+                lambda row: (
+                    row.get("flight_no"),
+                    (flight_dt := _parse_date(row.get("flight_date"))),
+                    row.get("origin"),
+                    row.get("destination"),
+                    _combine_datetime(flight_dt, _parse_time(row.get("sched_dep_time"))),
+                    _combine_datetime(flight_dt, _parse_time(row.get("sched_arr_time"))),
+                    row.get("status"),
+                    row.get("tail_number"),
+                ),
+            )
+
+            load_csv(
+                "bookings",
+                lambda row: (
+                    row.get("flight_no"),
+                    _parse_date(row.get("flight_date")),
+                    row.get("pnr"),
+                    row.get("passenger_name"),
+                    row.get("has_connection"),
+                    row.get("connecting_flight_no"),
+                ),
+            )
+
+            load_csv(
+                "crew_roster",
+                lambda row: (
+                    row.get("flight_no"),
+                    _parse_date(row.get("flight_date")),
+                    row.get("crew_id"),
+                    row.get("crew_role"),
+                ),
+            )
+
+            load_csv(
+                "crew_details",
+                lambda row: (
+                    row.get("crew_id"),
+                    row.get("crew_name"),
+                    row.get("duty_start_time"),
+                    int(row.get("max_duty_hours", 0) or 0),
+                ),
+            )
+
+            load_csv(
+                "aircraft_status",
+                lambda row: (
+                    row.get("tail_number"),
+                    row.get("current_location"),
+                    row.get("status"),
+                ),
+            )
+
     return counts
 
 def parse_markdown_files(kb_only: bool = False) -> Tuple[int, bool]:
