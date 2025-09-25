@@ -248,7 +248,7 @@ def create_response_template(response_type: str, session_id: str) -> Dict[str, A
 
 
 async def fetch_kb_context(query: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
-    """Search knowledge base via retrieval-svc"""
+    """Search knowledge base via knowledge-engine"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(

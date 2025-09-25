@@ -33,9 +33,9 @@ resources:
     - redis-deployment.yaml
     - redis-expose.yaml
     - redis-service.yaml
-    - retrieval-svc-deployment.yaml
-    - retrieval-svc-expose.yaml
-    - retrieval-svc-service.yaml
+    - knowledge-engine-deployment.yaml
+    - knowledge-engine-expose.yaml
+    - knowledge-engine-service.yaml
     - scalable-chatbot-svc-deployment.yaml
     - scalable-chatbot-svc-expose.yaml
     - scalable-chatbot-svc-service.yaml

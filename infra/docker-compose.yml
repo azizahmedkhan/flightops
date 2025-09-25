@@ -19,19 +19,22 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
 
-  retrieval-svc:
+  knowledge-engine:
     build:
       context: ..
-      dockerfile: services/retrieval-svc/Dockerfile
+      dockerfile: services/knowledge-engine/Dockerfile
     
+    env_file:
+      - ../.env
     environment:
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - OPENAI_API_KEY=
-      - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
     depends_on:
       db:
         condition: service_healthy
@@ -41,30 +44,28 @@ services:
     build:
       context: ..
       dockerfile: services/comms-svc/Dockerfile
-    
+    env_file:
+      - ../.env
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports: ["8083:8083"]
 
   agent-svc:
     build:
       context: ..
       dockerfile: services/agent-svc/Dockerfile
-    
+    env_file:
+      - ../.env
     environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-flightops}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASS=${DB_PASS:-postgres}
-      - RETRIEVAL_URL=http://retrieval-svc:8081
-      - COMMS_URL=http://comms-svc:8083
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RETRIEVAL_URL=http://knowledge-engine:8081
+      - COMMS_URL=http://comms-svc:8083
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS:-true}
     depends_on:
-      retrieval-svc:
+      knowledge-engine:
         condition: service_started
       comms-svc:
         condition: service_started
@@ -82,7 +83,6 @@ services:
       - DB_USER=${DB_USER:-postgres}
       - DB_PASS=${DB_PASS:-postgres}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       db:
         condition: service_healthy
@@ -96,13 +96,13 @@ services:
     environment:
       - COMMS_URL=http://comms-svc:8083
       - AGENT_URL=http://agent-svc:8082
-      - RETRIEVAL_URL=http://retrieval-svc:8081
+      - RETRIEVAL_URL=http://knowledge-engine:8081
     depends_on:
       agent-svc:
         condition: service_started
       comms-svc:
         condition: service_started
-      retrieval-svc:
+      knowledge-engine:
         condition: service_started
     ports: ["8087:8087"]
 
@@ -110,15 +110,16 @@ services:
     build:
       context: ..
       dockerfile: services/predictive-svc/Dockerfile
-    
+    env_file:
+      - ../.env
     environment:
+      - CHAT_MODEL=${CHAT_MODEL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-flightops}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASS=${DB_PASS:-postgres}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
     depends_on:
       db:
         condition: service_healthy
@@ -129,14 +130,16 @@ services:
       context: ..
       dockerfile: services/crew-svc/Dockerfile
     
+    env_file:
+      - ../.env
     environment:
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-flightops}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASS=${DB_PASS:-postgres}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
     depends_on:
       db:
         condition: service_healthy
@@ -147,18 +150,21 @@ services:
       context: ..
       dockerfile: services/scalable-chatbot-svc/Dockerfile
     
+    env_file:
+      - ../.env
     environment:
-      - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
-      - RETRIEVAL_SVC_URL=http://retrieval-svc:8081
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - REDIS_URL=redis://redis:6379
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - RETRIEVAL_SVC_URL=http://knowledge-engine:8081
       - AGENT_SVC_URL=http://agent-svc:8081
       - DB_ROUTER_URL=http://db-router-svc:8000
       - DEBUGPY=true
     depends_on:
       redis:
         condition: service_started
-      retrieval-svc:
+      knowledge-engine:
         condition: service_started
       agent-svc:
         condition: service_started
@@ -179,10 +185,12 @@ services:
       context: ..
       dockerfile: services/db-router-svc/Dockerfile
     
+    env_file:
+      - ../.env
     environment:
-      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASS:-postgres}@db:5432/${DB_NAME:-flightops}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASS:-postgres}@db:5432/${DB_NAME:-flightops}
     depends_on:
       db:
         condition: service_healthy
@@ -201,7 +209,7 @@ services:
     
     environment:
       - AGENT_URL=http://agent-svc:8082
-      - RETRIEVAL_URL=http://retrieval-svc:8081
+      - RETRIEVAL_URL=http://knowledge-engine:8081
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
       - CUSTOMER_CHAT_URL=http://customer-chat-svc:8087
@@ -213,12 +221,11 @@ services:
       - DB_NAME=${DB_NAME:-flightops}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASS=${DB_PASS:-postgres}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL:-text-embedding-3-small}
     depends_on:
       agent-svc:
         condition: service_started
-      retrieval-svc:
+      knowledge-engine:
         condition: service_started
       comms-svc:
         condition: service_started

@@ -99,7 +99,7 @@ export default function LLMAuditPage({}: LLMAuditPageProps) {
       'customer-chat-svc': 'bg-purple-100 text-purple-800 border-purple-200',
       'predictive-svc': 'bg-orange-100 text-orange-800 border-orange-200',
       'crew-svc': 'bg-pink-100 text-pink-800 border-pink-200',
-      'retrieval-svc': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'knowledge-engine': 'bg-indigo-100 text-indigo-800 border-indigo-200',
       'ingest-svc': 'bg-gray-100 text-gray-800 border-gray-200',
       'gateway-api': 'bg-yellow-100 text-yellow-800 border-yellow-200',
     };

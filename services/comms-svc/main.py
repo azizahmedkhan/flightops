@@ -1,28 +1,22 @@
-import sys
-import os
 import re
+import time
 from typing import Dict, Any, List, Optional
 
 from fastapi import Request
 from jinja2 import Template
 from pydantic import BaseModel
 
-from services.shared.base_service import BaseService
+from services.shared.base_service import BaseService, REQUEST_COUNT, LATENCY, log_startup
 from services.shared.prompt_manager import PromptManager
 from services.shared.llm_tracker import LLMTracker
 from services.shared.llm_client import create_llm_client
-from utils import REQUEST_COUNT, LATENCY, log_startup
 
 # Initialize base service
 service = BaseService("comms-svc", "1.0.0")
 app = service.get_app()
 
-# Get environment variables using the base service
-CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
-
 # Initialize LLM client
-llm_client = create_llm_client("comms-svc", CHAT_MODEL)
+llm_client = create_llm_client("comms-svc")
 
 class DraftReq(BaseModel):
     context: Dict[str, Any]
@@ -88,10 +82,6 @@ def pii_scrub(text: str) -> str:
 
 def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
     """Optional AI-powered tone refinement."""
-    if not OPENAI_API_KEY:
-        return template_text
-    
-    import time
     start_time = time.time()
     
     try:
@@ -112,10 +102,6 @@ def llm_rewrite_for_tone(template_text: str, tone: str) -> str:
 
 def translate_communication(text: str, target_language: str, context: Dict[str, Any]) -> str:
     """Translate communication to target language with cultural adaptation"""
-    if not OPENAI_API_KEY:
-        return text  # Fallback to original text
-    
-    import time
     start_time = time.time()
     
     try:
@@ -162,7 +148,7 @@ def generate_multilingual_comms(context: Dict[str, Any], target_languages: List[
     base_text = render_template(context, channel)
     
     # Apply tone refinement
-    if OPENAI_API_KEY and tone != "standard":
+    if tone != "standard":
         base_text = llm_rewrite_for_tone(base_text, tone)
     
     # Apply PII scrubbing
@@ -228,7 +214,7 @@ def draft(req: DraftReq, request: Request):
             scrubbed_text = pii_scrub(template_text)
             
             # Optional AI tone refinement
-            if OPENAI_API_KEY and req.tone != "standard":
+            if req.tone != "standard":
                 final_text = llm_rewrite_for_tone(scrubbed_text, req.tone)
             else:
                 final_text = scrubbed_text
@@ -237,7 +223,7 @@ def draft(req: DraftReq, request: Request):
                 "draft": final_text,
                 "template_used": req.channel,
                 "tone_applied": req.tone,
-                "ai_enhanced": bool(OPENAI_API_KEY and req.tone != "standard")
+                "ai_enhanced": req.tone != "standard"
             }
             
             service.log_request(request, {"status": "success", "channel": req.channel, "tone": req.tone})
@@ -286,11 +272,11 @@ def analyze_sentiment(req: SentimentAnalysisReq, request: Request):
     """Analyze sentiment of customer communication."""
     with LATENCY.labels("comms-svc", "/analyze_sentiment", "POST").time():
         try:
-            if not OPENAI_API_KEY:
+            try:
+                sentiment_result = analyze_sentiment_with_llm(req.text, req.context)
+            except Exception:
                 # Fallback to rule-based sentiment analysis
                 sentiment_result = analyze_sentiment_rule_based(req.text)
-            else:
-                sentiment_result = analyze_sentiment_with_llm(req.text, req.context)
             
             service.log_request(request, {"status": "success", "sentiment": sentiment_result.get("sentiment")})
             return sentiment_result

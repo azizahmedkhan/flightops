@@ -3,49 +3,174 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
-import { 
-  Activity, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Activity,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
   RefreshCw,
   Server,
   Database,
   MessageSquare,
+  MessageCircle,
   Search,
   Upload,
-  Loader2
+  Loader2,
+  Cpu
 } from 'lucide-react'
 
-interface ServiceHealth {
+type IconType = typeof Activity
+
+interface ServiceDefinition {
+  key: string
   name: string
-  url: string
+  port: number
+  path: string
+  icon: IconType
+  cardClasses: string
+  iconClass: string
+  titleClass: string
+  subtitleClass: string
+}
+
+interface ServiceStatus extends ServiceDefinition {
   status: 'healthy' | 'unhealthy' | 'checking'
   responseTime?: number
   lastChecked?: string
   error?: string
+  endpoint: string
 }
 
-const services: ServiceHealth[] = [
-  { name: 'Gateway API', url: '/', status: 'checking' },
-  { name: 'Agent Service', url: '/health', status: 'checking' },
-  { name: 'Retrieval Service', url: '/health', status: 'checking' },
-  { name: 'Comms Service', url: '/health', status: 'checking' },
-  { name: 'Ingest Service', url: '/health', status: 'checking' }
+const GATEWAY_BASE = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'
+
+const GATEWAY_URL = (() => {
+  try {
+    return new URL(GATEWAY_BASE)
+  } catch (error) {
+    console.warn('Invalid NEXT_PUBLIC_GATEWAY_URL, defaulting to http://localhost:8080', error)
+    return new URL('http://localhost:8080')
+  }
+})()
+
+const DEFAULT_GATEWAY_PORT = GATEWAY_URL.port
+  ? Number(GATEWAY_URL.port)
+  : GATEWAY_URL.protocol === 'https:'
+    ? 443
+    : 80
+
+const SERVICE_DEFINITIONS: ServiceDefinition[] = [
+  {
+    key: 'gateway',
+    name: 'Gateway API',
+    port: DEFAULT_GATEWAY_PORT,
+    path: '/health',
+    icon: Server,
+    cardClasses: 'bg-indigo-50 border-indigo-200',
+    iconClass: 'text-indigo-700',
+    titleClass: 'text-indigo-900',
+    subtitleClass: 'text-indigo-700'
+  },
+  {
+    key: 'knowledge-engine',
+    name: 'Knowledge Engine',
+    port: 8081,
+    path: '/health',
+    icon: Search,
+    cardClasses: 'bg-purple-50 border-purple-200',
+    iconClass: 'text-purple-700',
+    titleClass: 'text-purple-900',
+    subtitleClass: 'text-purple-700'
+  },
+  {
+    key: 'agent',
+    name: 'Agent Service',
+    port: 8082,
+    path: '/health',
+    icon: Activity,
+    cardClasses: 'bg-green-50 border-green-200',
+    iconClass: 'text-green-700',
+    titleClass: 'text-green-900',
+    subtitleClass: 'text-green-700'
+  },
+  {
+    key: 'comms',
+    name: 'Comms Service',
+    port: 8083,
+    path: '/health',
+    icon: MessageSquare,
+    cardClasses: 'bg-orange-50 border-orange-200',
+    iconClass: 'text-orange-700',
+    titleClass: 'text-orange-900',
+    subtitleClass: 'text-orange-700'
+  },
+  {
+    key: 'ingestion',
+    name: 'Ingestion Worker',
+    port: 8084,
+    path: '/health',
+    icon: Upload,
+    cardClasses: 'bg-red-50 border-red-200',
+    iconClass: 'text-red-700',
+    titleClass: 'text-red-900',
+    subtitleClass: 'text-red-700'
+  },
+  {
+    key: 'customer-chat',
+    name: 'Customer Chat',
+    port: 8087,
+    path: '/health',
+    icon: MessageCircle,
+    cardClasses: 'bg-pink-50 border-pink-200',
+    iconClass: 'text-pink-700',
+    titleClass: 'text-pink-900',
+    subtitleClass: 'text-pink-700'
+  },
+  {
+    key: 'scalable-chatbot',
+    name: 'Scalable Chatbot',
+    port: 8088,
+    path: '/health',
+    icon: Cpu,
+    cardClasses: 'bg-teal-50 border-teal-200',
+    iconClass: 'text-teal-700',
+    titleClass: 'text-teal-900',
+    subtitleClass: 'text-teal-700'
+  },
+  {
+    key: 'db-router',
+    name: 'DB Router',
+    port: 8089,
+    path: '/healthz',
+    icon: Database,
+    cardClasses: 'bg-yellow-50 border-yellow-200',
+    iconClass: 'text-yellow-700',
+    titleClass: 'text-yellow-900',
+    subtitleClass: 'text-yellow-700'
+  }
 ]
 
+const buildEndpoint = (service: Pick<ServiceDefinition, 'path' | 'port'>) => {
+  const url = new URL(service.path, GATEWAY_URL)
+  url.port = String(service.port)
+  return url.toString()
+}
+
 export default function MonitoringPage() {
-  const [serviceHealth, setServiceHealth] = useState<ServiceHealth[]>(services)
+  const [serviceHealth, setServiceHealth] = useState<ServiceStatus[]>(
+    SERVICE_DEFINITIONS.map(service => ({
+      ...service,
+      status: 'checking',
+      endpoint: buildEndpoint(service)
+    }))
+  )
   const [checking, setChecking] = useState(false)
   const [lastCheck, setLastCheck] = useState<Date | null>(null)
 
-  const checkServiceHealth = async (service: ServiceHealth) => {
+  const checkServiceHealth = async (service: ServiceStatus) => {
     const startTime = Date.now()
+    const endpoint = buildEndpoint(service)
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8080'
-      const url = service.name === 'Gateway API' ? baseUrl : `${baseUrl.replace('8080', service.name === 'Agent Service' ? '8082' : service.name === 'Retrieval Service' ? '8081' : service.name === 'Comms Service' ? '8083' : '8084')}${service.url}`
-      console.log('Checking service health:', url)
-      const response = await fetch(url, { 
+      const response = await fetch(endpoint, {
         method: 'GET',
         signal: AbortSignal.timeout(5000) // 5 second timeout
       })
@@ -58,7 +183,8 @@ export default function MonitoringPage() {
           status: 'healthy' as const,
           responseTime,
           lastChecked: new Date().toISOString(),
-          error: undefined
+          error: undefined,
+          endpoint
         }
       } else {
         return {
@@ -66,7 +192,8 @@ export default function MonitoringPage() {
           status: 'unhealthy' as const,
           responseTime,
           lastChecked: new Date().toISOString(),
-          error: `HTTP ${response.status}: ${response.statusText}`
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          endpoint
         }
       }
     } catch (error) {
@@ -76,7 +203,8 @@ export default function MonitoringPage() {
         status: 'unhealthy' as const,
         responseTime,
         lastChecked: new Date().toISOString(),
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
+        endpoint
       }
     }
   }
@@ -202,7 +330,7 @@ export default function MonitoringPage() {
               
               <div className="space-y-4">
                 {serviceHealth.map((service, index) => (
-                  <div key={index} className={`p-4 rounded-lg border-2 ${getStatusColor(service.status)}`}>
+                  <div key={service.key} className={`p-4 rounded-lg border-2 ${getStatusColor(service.status)}`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-3">
                         {getStatusIcon(service.status)}
@@ -212,11 +340,15 @@ export default function MonitoringPage() {
                         {service.responseTime && `${service.responseTime}ms`}
                       </div>
                     </div>
-                    
+
                     {service.error && (
                       <p className="text-sm text-red-600 mt-2">{service.error}</p>
                     )}
-                    
+
+                    <p className="text-xs text-gray-500 mt-1 break-all">
+                      Endpoint: {service.endpoint}
+                    </p>
+
                     {service.lastChecked && (
                       <p className="text-xs text-gray-500 mt-1">
                         Last checked: {new Date(service.lastChecked).toLocaleString()}
@@ -235,45 +367,20 @@ export default function MonitoringPage() {
               <h2 className="text-xl font-bold text-black mb-6">Services</h2>
               
               <div className="space-y-4">
-                <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
-                  <Server className="h-5 w-5 text-blue-600" />
-                  <div>
-                    <p className="font-bold text-blue-900">Gateway API</p>
-                    <p className="text-sm text-blue-700 font-semibold">Port 8080</p>
+                {serviceHealth.map(service => (
+                  <div
+                    key={`${service.key}-card`}
+                    className={`flex items-center space-x-3 p-3 rounded-lg border-2 ${service.cardClasses}`}
+                  >
+                    <service.icon className={`h-5 w-5 ${service.iconClass}`} />
+                    <div>
+                      <p className={`font-bold ${service.titleClass}`}>{service.name}</p>
+                      <p className={`text-sm font-semibold ${service.subtitleClass}`}>
+                        Port {service.port}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg border-2 border-green-200">
-                  <Activity className="h-5 w-5 text-green-600" />
-                  <div>
-                    <p className="font-bold text-green-900">Agent Service</p>
-                    <p className="text-sm text-green-700 font-semibold">Port 8082</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
-                  <Search className="h-5 w-5 text-purple-600" />
-                  <div>
-                    <p className="font-bold text-purple-900">Retrieval Service</p>
-                    <p className="text-sm text-purple-700 font-semibold">Port 8081</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border-2 border-orange-200">
-                  <MessageSquare className="h-5 w-5 text-orange-600" />
-                  <div>
-                    <p className="font-bold text-orange-900">Comms Service</p>
-                    <p className="text-sm text-orange-700 font-semibold">Port 8083</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-3 p-3 bg-red-50 rounded-lg border-2 border-red-200">
-                  <Upload className="h-5 w-5 text-red-600" />
-                  <div>
-                    <p className="font-bold text-red-900">Ingest Service</p>
-                    <p className="text-sm text-red-700 font-semibold">Port 8084</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 

@@ -4,7 +4,7 @@ scrape_configs:
   - job_name: 'gateway'
     static_configs: [{ targets: ['gateway-api:8080'] }]
   - job_name: 'retrieval'
-    static_configs: [{ targets: ['retrieval-svc:8081'] }]
+    static_configs: [{ targets: ['knowledge-engine:8081'] }]
   - job_name: 'agent'
     static_configs: [{ targets: ['agent-svc:8082'] }]
   - job_name: 'comms'

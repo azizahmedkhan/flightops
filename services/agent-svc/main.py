@@ -1,158 +1,57 @@
-import sys
-import os
 import json
+import re
+import time
 from contextlib import asynccontextmanager
-from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 
 import httpx
-import psycopg
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
-from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
-
-from base_service import BaseService
-from prompt_manager import PromptManager
-from llm_tracker import LLMTracker
-from llm_client import create_llm_client
-from utils import LATENCY, log_startup
+from services.shared.base_service import BaseService, LATENCY, log_startup
+from services.shared.prompt_manager import PromptManager
+from services.shared.llm_tracker import LLMTracker
+from services.shared.llm_client import create_llm_client
 
 # Initialize base service
 service = BaseService("agent-svc", "1.0.0")
 app = service.get_app()
 
 # Get environment variables using the base service
-DB_HOST = service.get_env_var("DB_HOST")
-DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME")
-DB_USER = service.get_env_var("DB_USER")
-DB_PASS = service.get_env_var("DB_PASS")
 RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL")
 COMMS_URL = service.get_env_var("COMMS_URL")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
-CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", True)
 
 # Initialize LLM client
-llm_client = create_llm_client("agent-svc", CHAT_MODEL)
+llm_client = create_llm_client("agent-svc")
 
-# Create database connection pool
-DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
-db_pool = None
+KNOWLEDGE_ENGINE_TIMEOUT = 12.0
 
 
-def _column_type(conn, table: str, column: str) -> Optional[str]:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT data_type
-            FROM information_schema.columns
-            WHERE table_name = %s AND column_name = %s
-            """,
-            (table, column),
-        )
-        row = cur.fetchone()
-        return row[0] if row else None
+def _post_knowledge_engine(path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Helper to call the knowledge engine service."""
+    if not RETRIEVAL_URL:
+        raise HTTPException(status_code=500, detail="Knowledge engine URL not configured")
 
-
-def _alter_column(conn, table: str, column: str, target_type: str, expression: str) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {target_type} USING {expression}"
-        )
-
-
-def _migrate_schedule_columns():
-    """Ensure schedule-related columns use DATE/TIMESTAMP types."""
-    if not db_pool:
-        return
-
-    migrations = [
-        (
-            "flights",
-            "flight_date",
-            "date",
-            "NULLIF(flight_date, '')::date",
-        ),
-        (
-            "bookings",
-            "flight_date",
-            "date",
-            "NULLIF(flight_date, '')::date",
-        ),
-        (
-            "crew_roster",
-            "flight_date",
-            "date",
-            "NULLIF(flight_date, '')::date",
-        ),
-        (
-            "flights",
-            "sched_dep_time",
-            "timestamp without time zone",
-            "CASE "
-            "WHEN sched_dep_time IS NULL OR sched_dep_time = '' THEN NULL "
-            "WHEN sched_dep_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
-            "THEN (flight_date::text || ' ' || sched_dep_time)::timestamp "
-            "ELSE NULLIF(sched_dep_time, '')::timestamp "
-            "END",
-        ),
-        (
-            "flights",
-            "sched_arr_time",
-            "timestamp without time zone",
-            "CASE "
-            "WHEN sched_arr_time IS NULL OR sched_arr_time = '' THEN NULL "
-            "WHEN sched_arr_time ~ '^\\d{2}:\\d{2}(:\\d{2})?$' AND flight_date IS NOT NULL "
-            "THEN (flight_date::text || ' ' || sched_arr_time)::timestamp "
-            "ELSE NULLIF(sched_arr_time, '')::timestamp "
-            "END",
-        ),
-    ]
-
-    with db_pool.connection() as conn:
-        conn.autocommit = False
-        for table, column, target_type, expression in migrations:
-            current = _column_type(conn, table, column)
-            if current is None or current == target_type:
-                continue
-
-            try:
-                _alter_column(conn, table, column, target_type, expression)
-                conn.commit()
-                service.logger.info(
-                    "agent-svc migrated %s.%s from %s to %s",
-                    table,
-                    column,
-                    current,
-                    target_type,
-                )
-            except Exception as exc:
-                service.logger.warning(
-                    "agent-svc failed to migrate %s.%s to %s: %s",
-                    table,
-                    column,
-                    target_type,
-                    exc,
-                )
-                conn.rollback()
+    url = f"{RETRIEVAL_URL}{path}"
+    try:
+        response = httpx.post(url, json=payload, timeout=KNOWLEDGE_ENGINE_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPStatusError as exc:
+        service.log_error(exc, f"knowledge_engine::{path}")
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=f"Knowledge engine error: {exc.response.text}",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - network errors
+        service.log_error(exc, f"knowledge_engine::{path}")
+        raise HTTPException(status_code=502, detail="Knowledge engine unavailable") from exc
 
 @asynccontextmanager
 async def lifespan(app):
-    global db_pool
     log_startup("agent-svc")
-    
-    # Initialize connection pool
-    db_pool = ConnectionPool(DB_CONN_STRING, min_size=2, max_size=10)
-    _migrate_schedule_columns()
-    
     yield
-    
-    # Close connection pool on shutdown
-    if db_pool:
-        db_pool.close()
 
 # Set lifespan for the app
 app.router.lifespan_context = lifespan
@@ -163,118 +62,54 @@ class Ask(BaseModel):
     date: str
 
 
-def _parse_date(value: str) -> date:
-    """Parse incoming string dates into date objects."""
-    if isinstance(value, date):
-        return value
-
-    value = value.strip()
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-
-    try:
-        return datetime.fromisoformat(value).date()
-    except ValueError as exc:
-        raise ValueError(f"Invalid date value: {value}") from exc
-
-
-def _iso_or_none(value: Optional[Any]) -> Optional[str]:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
-
 def pii_scrub(text: str) -> str:
-    import re
     text = re.sub(r"[A-Z0-9]{6}(?=\b)", "[PNR]", text)
     text = re.sub(r"[\w\.-]+@[\w\.-]+", "[EMAIL]", text)
     text = re.sub(r"\+?\d[\d\s-]{6,}", "[PHONE]", text)
     return text
 
 def tool_flight_lookup(flight_no: str, date: str) -> Dict[str, Any]:
-    flight_dt = _parse_date(date)
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT flight_no, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
-                FROM flights
-                WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, flight_dt))
-            row = cur.fetchone()
-            if not row:
-                return {}
-            return {"flight_no":row[0], "origin":row[1], "destination":row[2],
-                    "sched_dep":_iso_or_none(row[3]), "sched_arr":_iso_or_none(row[4]), "status":row[5], "tail_number":row[6]}
+    try:
+        return _post_knowledge_engine(
+            "/tools/lookup_flight",
+            {"flight_no": flight_no, "date": date},
+        )
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            return {}
+        raise
+    except Exception as exc:
+        service.log_error(exc, "tool_flight_lookup")
+        return {}
 
 def tool_impact_assessor(flight_no: str, date: str) -> Dict[str, Any]:
-    flight_dt = _parse_date(date)
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            # Get passenger count and connection details
-            cur.execute("""
-                SELECT COUNT(*), COUNT(CASE WHEN has_connection = 'TRUE' THEN 1 END)
-                FROM bookings
-                WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, flight_dt))
-            pax_data = cur.fetchone()
-            pax = pax_data[0]
-            connecting_pax = pax_data[1]
-            
-            # Get crew count and roles
-            cur.execute("""
-                SELECT COUNT(*), STRING_AGG(DISTINCT crew_role, ', ')
-                FROM crew_roster
-                WHERE flight_no=%s AND flight_date=%s
-            """, (flight_no, flight_dt))
-            crew_data = cur.fetchone()
-            crew = crew_data[0]
-            crew_roles = crew_data[1] or "Unknown"
-            
-            # Get aircraft status
-            cur.execute("""
-                SELECT f.tail_number, a.status, a.current_location
-                FROM flights f
-                LEFT JOIN aircraft_status a ON f.tail_number = a.tail_number
-                WHERE f.flight_no=%s AND f.flight_date=%s
-            """, (flight_no, flight_dt))
-            aircraft_data = cur.fetchone()
-            aircraft_status = aircraft_data[1] if aircraft_data else "Unknown"
-            aircraft_location = aircraft_data[2] if aircraft_data else "Unknown"
-            
-    return {
-        "passengers": pax, 
-        "connecting_passengers": connecting_pax,
-        "crew": crew, 
-        "crew_roles": crew_roles,
-        "aircraft_status": aircraft_status,
-        "aircraft_location": aircraft_location,
-        "summary": f"{pax} passengers ({connecting_pax} with connections) and {crew} crew affected. Aircraft status: {aircraft_status} at {aircraft_location}."
-    }
+    try:
+        return _post_knowledge_engine(
+            "/tools/impact_assessment",
+            {"flight_no": flight_no, "date": date},
+        )
+    except Exception as exc:
+        service.log_error(exc, "tool_impact_assessor")
+        return {
+            "passengers": 0,
+            "connecting_passengers": 0,
+            "crew": 0,
+            "crew_roles": "Unknown",
+            "aircraft_status": "Unknown",
+            "aircraft_location": "Unknown",
+            "summary": "Impact data unavailable",
+        }
 
 def tool_crew_details(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Get detailed crew information for a flight."""
-    flight_dt = _parse_date(date)
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT cr.crew_id, cr.crew_role, cd.crew_name, cd.duty_start_time, cd.max_duty_hours
-                FROM crew_roster cr
-                LEFT JOIN crew_details cd ON cr.crew_id = cd.crew_id
-                WHERE cr.flight_no=%s AND cr.flight_date=%s
-                ORDER BY cr.crew_role
-            """, (flight_no, flight_dt))
-            crew_members = []
-            for row in cur.fetchall():
-                crew_members.append({
-                    "crew_id": row[0],
-                    "role": row[1],
-                    "name": row[2] or "Unknown",
-                    "duty_start": row[3] or "Unknown",
-                    "max_hours": row[4] or 0
-                })
-    return crew_members
+    try:
+        return _post_knowledge_engine(
+            "/tools/crew_details",
+            {"flight_no": flight_no, "date": date},
+        )
+    except Exception as exc:
+        service.log_error(exc, "tool_crew_details")
+        return []
 
 def tool_advanced_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Advanced rebooking optimization with LLM-powered analysis."""
@@ -304,29 +139,30 @@ def tool_advanced_rebooking_optimizer(flight_no: str, date: str) -> List[Dict[st
 
 def get_passenger_profiles(flight_no: str, date: str) -> List[Dict[str, Any]]:
     """Get passenger profiles and preferences (mock data)"""
-    with db_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT pnr, passenger_name, has_connection, connecting_flight_no
-                FROM bookings
-                WHERE flight_no = %s AND flight_date = %s
-            """, (flight_no, date))
-            bookings = cur.fetchall()
-    
+    try:
+        raw_profiles = _post_knowledge_engine(
+            "/tools/passenger_profiles",
+            {"flight_no": flight_no, "date": date},
+        )
+    except Exception as exc:
+        service.log_error(exc, "get_passenger_profiles")
+        raw_profiles = []
+
     profiles = []
-    for pnr, name, has_connection, connecting_flight in bookings:
-        # Mock passenger profile data
+    for record in raw_profiles:
+        name = record.get("passenger_name") or record.get("name", "Unknown")
+        has_connection = record.get("has_connection") in (True, "TRUE", "true")
         profiles.append({
-            "pnr": pnr,
+            "pnr": record.get("pnr"),
             "name": name,
-            "has_connection": has_connection == "TRUE",
-            "connecting_flight": connecting_flight,
-            "loyalty_tier": "Gold" if "VIP" in name else "Silver" if "Premium" in name else "Bronze",
-            "preferences": ["window_seat", "early_departure"] if "Early" in name else ["aisle_seat"],
-            "special_needs": ["wheelchair"] if "Access" in name else [],
-            "travel_purpose": "business" if "Corp" in name else "leisure"
+            "has_connection": has_connection,
+            "connecting_flight": record.get("connecting_flight_no") or record.get("connecting_flight"),
+            "loyalty_tier": "Gold" if name and "VIP" in name else ("Silver" if name and "Premium" in name else "Bronze"),
+            "preferences": ["window_seat", "early_departure"] if name and "Early" in name else ["aisle_seat"],
+            "special_needs": ["wheelchair"] if name and "Access" in name else [],
+            "travel_purpose": "business" if name and "Corp" in name else "leisure",
         })
-    
+
     return profiles
 
 def generate_base_rebooking_options(flight_no: str, date: str, pax_count: int, connecting_pax: int, is_domestic: bool) -> List[Dict[str, Any]]:
@@ -459,10 +295,6 @@ def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profile
     import time
     start_time = time.time()
     
-    if not OPENAI_API_KEY or not OPENAI_API_KEY.startswith('sk-'):
-        print(f"DEBUG: No valid OpenAI API key, falling back to rule-based")
-        return optimize_rebooking_rule_based(options, passenger_profiles, flight, impact)
-    
     try:
         prompt = PromptManager.get_rebooking_optimization_prompt(flight, impact, passenger_profiles, options)
         
@@ -513,14 +345,13 @@ def optimize_rebooking_with_llm(options: List[Dict[str, Any]], passenger_profile
         service.log_error(e, "LLM rebooking optimization")
         
         # Create a test LLM message to show in UI even when API fails
-        import time
         test_message = {
             "id": "test-message-" + str(int(time.time())),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "service": "agent-svc",
             "prompt": prompt[:200] + "..." if len(prompt) > 200 else prompt,
             "response": f"LLM call failed: {str(e)[:200]}...",
-            "model": CHAT_MODEL,
+            "model": llm_client.model,
             "tokens_used": 0,
             "duration_ms": (time.time() - start_time) * 1000,
             "metadata": {
@@ -575,7 +406,11 @@ def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
     try:
         print(f"DEBUG: Calling policy grounder with question: {question}")
         print(f"DEBUG: RETRIEVAL_URL: {RETRIEVAL_URL}")
-        r = httpx.post(f"{RETRIEVAL_URL}/search", json={"q":question, "k":k}, timeout=10.0)
+        r = httpx.post(
+            f"{RETRIEVAL_URL}/search",
+            json={"query": question, "k": k},
+            timeout=10.0,
+        )
         print(f"DEBUG: Response status: {r.status_code}")
         response_data = r.json()
         print(f"DEBUG: Response data: {response_data}")
@@ -691,7 +526,7 @@ def test_llm(request: Request):
                 "service": "agent-svc",
                 "prompt": prompt[:200] + "..." if len(prompt) > 200 else prompt,
                 "response": f"LLM call failed: {str(e)[:200]}...",
-                "model": CHAT_MODEL,
+                "model": llm_client.model,
                 "tokens_used": 0,
                 "duration_ms": (time.time() - start_time) * 1000,
                 "metadata": {

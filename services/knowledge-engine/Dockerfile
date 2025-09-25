@@ -8,10 +8,10 @@ WORKDIR /app
 
 COPY services/ /app/services/
 
-WORKDIR /app/services/customer-chat-svc
+WORKDIR /app/services/knowledge-engine
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8087
+EXPOSE 8081
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8087"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8081"]

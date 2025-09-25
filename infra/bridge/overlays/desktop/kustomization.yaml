@@ -15,6 +15,6 @@ patches:
     - path: ingest-svc-service.yaml
     - path: predictive-svc-service.yaml
     - path: redis-service.yaml
-    - path: retrieval-svc-service.yaml
+    - path: knowledge-engine-service.yaml
     - path: scalable-chatbot-svc-service.yaml
     - path: web-service.yaml

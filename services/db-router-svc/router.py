@@ -12,7 +12,7 @@ import json
 
 from models import Intent, RouteResponse
 from util import normalize_city_to_iata, normalize_flight_number, normalize_time_phrase, extract_date_from_text
-from shared.llm_client import LLMClient
+from services.shared.llm_client import LLMClient
 
 
 class QueryRouter:

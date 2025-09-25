@@ -1,7 +1,7 @@
 This project already implements several LLM use cases:
 
 ### 1. **RAG (Retrieval-Augmented Generation)**
-- **Service**: `retrieval-svc`
+- **Service**: `knowledge-engine`
 - **Purpose**: Semantic search through policy documents and SOPs
 - **Implementation**: Hybrid search combining BM25 and vector embeddings
 - **Value**: Instant policy expertise without manual document searching

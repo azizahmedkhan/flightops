@@ -1,21 +1,21 @@
-#! retrieval-svc-service.yaml
+#! knowledge-engine-service.yaml
 # Generated code, do not edit
 apiVersion: v1
 kind: Service
 metadata:
-    name: retrieval-svc-published
+    name: knowledge-engine-published
     namespace: infra
     labels:
         com.docker.compose.project: infra
-        com.docker.compose.service: retrieval-svc
+        com.docker.compose.service: knowledge-engine
 spec:
     selector:
         com.docker.compose.project: infra
-        com.docker.compose.service: retrieval-svc
+        com.docker.compose.service: knowledge-engine
     ports:
-        - name: retrieval-8081
+        - name: knowledge-8081
           port: 8081
           protocol: TCP
-          targetPort: retrieval-8081
+          targetPort: knowledge-8081
 
 # check if there is at least one published port

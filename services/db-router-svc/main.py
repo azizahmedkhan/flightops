@@ -28,8 +28,8 @@ from execute import (
     get_database_health, validate_intent_args
 )
 from util import format_datetime_for_display, get_city_name
-from shared.llm_client import LLMClient
-from shared.base_service import BaseService
+from services.shared.llm_client import LLMClient
+from services.shared.base_service import BaseService
 
 
 # Global instances
@@ -37,7 +37,7 @@ llm_client: LLMClient = None
 query_router: QueryRouter = None
 base_service: BaseService = None
 
-RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8081")
+RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://knowledge-engine:8081")
 try:
     DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
 except ValueError:

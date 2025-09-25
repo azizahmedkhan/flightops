@@ -1,6 +1,5 @@
-import sys
-import os
 import json
+import struct
 from contextlib import asynccontextmanager
 from datetime import datetime, date, time
 from typing import List, Dict, Any, Optional
@@ -13,10 +12,8 @@ from pydantic import BaseModel
 from psycopg.errors import UndefinedTable
 from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
-
-from base_service import BaseService
-from llm_tracker import LLMTracker
+from services.shared.base_service import BaseService
+from services.shared.llm_tracker import LLMTracker
 
 # Initialize base service
 service = BaseService("gateway-api", "1.0.0")
@@ -26,7 +23,7 @@ app = service.get_app()
 
 # Get environment variables using the base service
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://retrieval-svc:8081")
+RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://knowledge-engine:8081")
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 INGEST_URL = service.get_env_var("INGEST_URL", "http://ingest-svc:8084")
 CUSTOMER_CHAT_URL = service.get_env_var("CUSTOMER_CHAT_URL", "http://customer-chat-svc:8085")
@@ -42,7 +39,6 @@ DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
 
 # Embedding configuration
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
 
 # Create database connection pool
@@ -71,7 +67,7 @@ def embed(text: str) -> List[float]:
     """Generate embeddings using OpenAI API."""
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = OpenAI()  # Uses OPENAI_API_KEY from environment
         resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
         return resp.data[0].embedding
     except Exception as e:
@@ -269,6 +265,96 @@ def _serialize_temporal_fields(row: Dict[str, Any]) -> Dict[str, Any]:
             serialized[field] = value.isoformat()
 
     return serialized
+
+
+def _normalize_embedding(raw_embedding: Any, expected_dims: Optional[Any]) -> Optional[List[float]]:
+    """Coerce embeddings from Postgres/pgvector into JSON-safe float lists."""
+    if raw_embedding is None:
+        return None
+
+    dims: Optional[int] = None
+    if expected_dims is not None:
+        try:
+            dims = int(expected_dims)
+        except (TypeError, ValueError):  # defensive: unexpected db result
+            service.logger.warning(f"Unable to coerce embedding dims '{expected_dims}' to int")
+
+    try:
+        values: Optional[List[float]] = None
+
+        if hasattr(raw_embedding, "tolist"):
+            values = [float(x) for x in raw_embedding.tolist()]
+        elif isinstance(raw_embedding, (list, tuple)):
+            values = [float(x) for x in raw_embedding]
+        elif isinstance(raw_embedding, memoryview):
+            buffer = raw_embedding.tobytes()
+            if len(buffer) % 4 != 0:
+                service.logger.warning(
+                    "Embedding buffer length is not divisible by 4; cannot decode vector"
+                )
+                return None
+            values = [value for (value,) in struct.iter_unpack("!f", buffer)]
+        elif isinstance(raw_embedding, (bytes, bytearray)):
+            buffer = bytes(raw_embedding)
+            if len(buffer) % 4 != 0:
+                service.logger.warning(
+                    "Embedding byte payload length is not divisible by 4; cannot decode vector"
+                )
+                return None
+            values = [value for (value,) in struct.iter_unpack("!f", buffer)]
+        elif isinstance(raw_embedding, str):
+            cleaned = raw_embedding.strip()
+            if cleaned:
+                try:
+                    values_json = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    if cleaned.startswith("[") and cleaned.endswith("]"):
+                        body = cleaned[1:-1]
+                        parts = [part.strip() for part in body.split(",") if part.strip()]
+                        values = [float(part) for part in parts]
+                    else:
+                        service.logger.warning(
+                            "Unsupported embedding string format; expected JSON array representation"
+                        )
+                        return None
+                else:
+                    if isinstance(values_json, list):
+                        values = [float(x) for x in values_json]
+                    else:
+                        service.logger.warning(
+                            "Embedding string decoded to non-list JSON value; dropping embedding"
+                        )
+                        return None
+            else:
+                return None
+        else:
+            cleaned = str(raw_embedding).strip()
+            if cleaned.startswith("[") and cleaned.endswith("]"):
+                try:
+                    value_list = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    body = cleaned[1:-1]
+                    parts = [part.strip() for part in body.split(",") if part.strip()]
+                    value_list = [float(part) for part in parts]
+                values = [float(x) for x in value_list]
+            else:
+                service.logger.warning(
+                    f"Unsupported embedding type {type(raw_embedding)}; returning None"
+                )
+                return None
+
+        if not values:
+            return None
+
+        if dims is not None and len(values) != dims:
+            service.logger.warning(
+                f"Embedding length {len(values)} does not match expected dimensions {dims}"
+            )
+
+        return values
+    except Exception as exc:  # pragma: no cover - defensive against malformed data
+        service.logger.error(f"Failed to normalize embedding: {exc}")
+        return None
 
 
 def _column_type(conn, table: str, column: str) -> Optional[str]:
@@ -526,6 +612,20 @@ async def search(payload: dict, request: Request):
     try:
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{RETRIEVAL_URL}/search", json=payload, timeout=30.0)
+            if r.status_code >= 400:
+                message = None
+                try:
+                    error_body = r.json()
+                    message = error_body if isinstance(error_body, str) else error_body.get("detail")
+                except ValueError:
+                    message = r.text
+
+                service.log_request(
+                    request,
+                    {"status": "error", "upstream_status": r.status_code, "upstream_detail": message},
+                )
+                raise HTTPException(status_code=r.status_code, detail=message or "Search failed")
+
             result = r.json()
             service.log_request(request, {"status": "success"})
             return result
@@ -1032,58 +1132,38 @@ async def get_policies(request: Request):
             ORDER BY d.id
         """)
         
-        # Debug logging
         service.logger.info(f"Retrieved {len(policies)} policies from database")
-        for i, policy in enumerate(policies):
-            service.logger.info(f"Policy {i}: id={policy.get('id')}, title={policy.get('title')}, embedding_type={type(policy.get('embedding'))}, embedding_value={policy.get('embedding')}")
-        
-        # Convert vector embeddings to arrays for JSON serialization
+
         for policy in policies:
-            embedding = policy.get('embedding')
-            embedding_dims = policy.get('embedding_dims')
-            
-            # Remove the embedding_dims field as it's not part of the Policy model
-            if 'embedding_dims' in policy:
-                del policy['embedding_dims']
-            
-            if embedding is not None and embedding_dims is not None:
+            raw_embedding = policy.get('embedding')
+            embedding_dims = policy.pop('embedding_dims', None)
+            normalized_embedding = _normalize_embedding(raw_embedding, embedding_dims)
+
+            if normalized_embedding is None and raw_embedding is not None:
+                service.logger.warning(
+                    f"Failed to normalize embedding for policy {policy.get('id')} (type={type(raw_embedding)})"
+                )
+            elif normalized_embedding is not None and embedding_dims is not None:
+                preview = ", ".join(f"{value:.4f}" for value in normalized_embedding[:3])
+                service.logger.debug(
+                    "Embedding normalized for policy {} ({} dims expected {}, preview [{}{}])",
+                    policy.get('id'),
+                    len(normalized_embedding),
+                    embedding_dims,
+                    preview,
+                    "..." if len(normalized_embedding) > 3 else "",
+                )
+
+            policy['embedding'] = normalized_embedding
+
+            meta = policy.get('meta')
+            if isinstance(meta, str):
                 try:
-                    # Handle pgvector data - it might be a string representation or a special object
-                    if isinstance(embedding, str):
-                        # If it's a string, try to parse it as a vector representation
-                        # pgvector often returns strings like "[0.1, 0.2, 0.3]" or similar
-                        if embedding.startswith('[') and embedding.endswith(']'):
-                            # Remove brackets and split by comma
-                            vector_str = embedding[1:-1]
-                            if vector_str.strip():
-                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
-                                service.logger.info(f"Parsed string embedding for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
-                            else:
-                                policy['embedding'] = None
-                        else:
-                            policy['embedding'] = None
-                    elif hasattr(embedding, '__iter__') and not isinstance(embedding, str):
-                        # If it's already iterable (list, tuple, etc.)
-                        policy['embedding'] = list(embedding)
-                        service.logger.info(f"Converted iterable embedding for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
-                    else:
-                        # Try to convert to string first, then parse
-                        embedding_str = str(embedding)
-                        if embedding_str.startswith('[') and embedding_str.endswith(']'):
-                            vector_str = embedding_str[1:-1]
-                            if vector_str.strip():
-                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
-                                service.logger.info(f"Converted string representation for policy {policy.get('id')}: {len(policy['embedding'])} dimensions (expected: {embedding_dims})")
-                            else:
-                                policy['embedding'] = None
-                        else:
-                            service.logger.info(f"Unknown embedding format for policy {policy.get('id')}: {type(embedding)} - {embedding} (expected dims: {embedding_dims})")
-                            policy['embedding'] = None
-                except Exception as e:
-                    service.logger.error(f"Error converting embedding for policy {policy.get('id')}: {e} (expected dims: {embedding_dims})")
-                    policy['embedding'] = None
-            else:
-                service.logger.info(f"No embedding found for policy {policy.get('id')} (dims: {embedding_dims})")
+                    policy['meta'] = json.loads(meta)
+                except json.JSONDecodeError:
+                    service.logger.warning(
+                        f"Policy {policy.get('id')} meta column is not valid JSON string; leaving as-is"
+                    )
         
         service.log_request(request, {"status": "success", "count": len(policies)})
         return policies
@@ -1174,42 +1254,19 @@ async def search_policies(query: dict, request: Request):
             ORDER BY d.id
         """, (f"%{search_term}%", f"%{search_term}%"))
         
-        # Convert vector embeddings to arrays for JSON serialization
         for policy in policies:
-            embedding = policy.get('embedding')
-            embedding_dims = policy.get('embedding_dims')
-            
-            # Remove the embedding_dims field as it's not part of the Policy model
-            if 'embedding_dims' in policy:
-                del policy['embedding_dims']
-            
-            if embedding is not None and embedding_dims is not None:
+            raw_embedding = policy.get('embedding')
+            embedding_dims = policy.pop('embedding_dims', None)
+            policy['embedding'] = _normalize_embedding(raw_embedding, embedding_dims)
+
+            meta = policy.get('meta')
+            if isinstance(meta, str):
                 try:
-                    # Handle pgvector data - it might be a string representation or a special object
-                    if isinstance(embedding, str):
-                        # If it's a string, try to parse it as a vector representation
-                        if embedding.startswith('[') and embedding.endswith(']'):
-                            vector_str = embedding[1:-1]
-                            if vector_str.strip():
-                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
-                            else:
-                                policy['embedding'] = None
-                        else:
-                            policy['embedding'] = None
-                    elif hasattr(embedding, '__iter__') and not isinstance(embedding, str):
-                        policy['embedding'] = list(embedding)
-                    else:
-                        embedding_str = str(embedding)
-                        if embedding_str.startswith('[') and embedding_str.endswith(']'):
-                            vector_str = embedding_str[1:-1]
-                            if vector_str.strip():
-                                policy['embedding'] = [float(x.strip()) for x in vector_str.split(',')]
-                            else:
-                                policy['embedding'] = None
-                        else:
-                            policy['embedding'] = None
-                except Exception as e:
-                    policy['embedding'] = None
+                    policy['meta'] = json.loads(meta)
+                except json.JSONDecodeError:
+                    service.logger.warning(
+                        f"Policy {policy.get('id')} meta column is not valid JSON string; leaving as-is"
+                    )
         
         service.log_request(request, {"status": "success", "count": len(policies)})
         return policies

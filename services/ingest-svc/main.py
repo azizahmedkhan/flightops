@@ -1,5 +1,3 @@
-import sys
-import os
 import csv
 import glob
 import json
@@ -14,10 +12,7 @@ from fastapi import Request
 from pydantic import BaseModel
 from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
-
-from base_service import BaseService
-from utils import log_startup
+from services.shared.base_service import BaseService, log_startup
 
 # Initialize base service
 service = BaseService("ingest-svc", "1.0.0")
@@ -29,7 +24,6 @@ DB_PORT = service.get_env_int("DB_PORT", 5432)
 DB_NAME = service.get_env_var("DB_NAME", "flightops")
 DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
 
 # Create database connection pool
@@ -42,7 +36,7 @@ def embed(text: str) -> List[float]:
     """Generate embeddings using OpenAI API."""
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = OpenAI()  # Uses OPENAI_API_KEY from environment
         resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
         return resp.data[0].embedding
     except Exception as e:
@@ -324,7 +318,7 @@ def parse_markdown_files(kb_only: bool = False) -> Tuple[int, bool]:
     """Parse markdown policy files and return count of loaded docs and embeddings availability."""
     doc_count = 0
     chunk_count = 0
-    embeddings_available = bool(OPENAI_API_KEY)
+    embeddings_available = True  # Will be determined by actual API call
     
     with db_pool.connection() as conn:
         conn.autocommit = True

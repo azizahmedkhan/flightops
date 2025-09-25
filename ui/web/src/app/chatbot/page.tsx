@@ -84,7 +84,7 @@ const ChatbotPage: React.FC = () => {
   useEffect(() => {
     return () => {
       // Cleanup on unmount
-      if (wsRef.current) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
       if (heartbeatIntervalRef.current) {
@@ -147,7 +147,7 @@ const ChatbotPage: React.FC = () => {
       setError(null);
       
       // Close existing connection if any
-      if (wsRef.current) {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
       

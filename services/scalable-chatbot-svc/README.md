@@ -48,7 +48,7 @@ REDIS_URL=redis://redis:6379
 
 # Optional
 CHAT_MODEL=gpt-4o-mini
-RETRIEVAL_URL=http://retrieval-svc:8081
+RETRIEVAL_URL=http://knowledge-engine:8081
 AGENT_URL=http://agent-svc:8082
 COMMS_URL=http://comms-svc:8083
 ```

@@ -22,10 +22,10 @@ services:
     ports: ["6379:6379"]
     restart: unless-stopped
 
-  retrieval-svc:
+  knowledge-engine:
     build:
       context: ..
-      dockerfile: services/retrieval-svc/Dockerfile
+      dockerfile: services/knowledge-engine/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV}
       - DB_HOST=${DB_HOST}
@@ -33,7 +33,6 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
     depends_on:
       db:
@@ -47,7 +46,6 @@ services:
       dockerfile: services/comms-svc/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL}
     ports: ["8083:8083"]
     restart: unless-stopped
@@ -58,20 +56,14 @@ services:
       dockerfile: services/agent-svc/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASS=${DB_PASS}
       - RETRIEVAL_URL=${RETRIEVAL_URL}
       - COMMS_URL=${COMMS_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL}
       - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS}
     depends_on:
       db:
         condition: service_healthy
-      retrieval-svc:
+      knowledge-engine:
         condition: service_started
     ports: ["8082:8082"]
     restart: unless-stopped
@@ -87,7 +79,6 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
     depends_on:
       db:
@@ -106,7 +97,6 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL}
     depends_on:
       db:
@@ -159,7 +149,6 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CHAT_MODEL=${CHAT_MODEL}
     depends_on:
       db:
@@ -185,12 +174,11 @@ services:
       - CUSTOMER_CHAT_URL=${CUSTOMER_CHAT_URL}
       - PREDICTIVE_URL=${PREDICTIVE_URL}
       - CREW_URL=${CREW_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
     depends_on:
       - db
       - agent-svc
-      - retrieval-svc
+      - knowledge-engine
       - comms-svc
       - ingest-svc
       - customer-chat-svc

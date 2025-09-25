@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 WORKDIR /app
 
 # Install system dependencies
@@ -7,16 +11,14 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY services/predictive-svc/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY services/ /app/services/
 
-# Copy shared utilities and application code
-COPY services/shared ./shared
-COPY services/predictive-svc/ ./
+WORKDIR /app/services/predictive-svc
+
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose port
 EXPOSE 8085
 
 # Run the application
-CMD ["python", "main.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8085"]

@@ -1,16 +1,20 @@
 FROM python:3.11-slim
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 WORKDIR /app
-COPY services/ingest-svc/requirements.txt .
+
+COPY services/ /app/services/
+
+WORKDIR /app/services/ingest-svc
+
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy shared directory first
-COPY services/shared ./shared
-
-# Copy service files
-COPY services/ingest-svc/ .
 
 # Copy data into the image so /ingest/seed works without mounts
 COPY data /data
+
 EXPOSE 8084
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8084"]

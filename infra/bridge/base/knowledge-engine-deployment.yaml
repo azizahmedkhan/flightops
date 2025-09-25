@@ -1,31 +1,31 @@
-#! retrieval-svc-deployment.yaml
+#! knowledge-engine-deployment.yaml
 # Generated code, do not edit
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-    name: retrieval-svc
+    name: knowledge-engine
     namespace: infra
     labels:
         com.docker.compose.project: infra
-        com.docker.compose.service: retrieval-svc
+        com.docker.compose.service: knowledge-engine
 spec:
     replicas: 1
     selector:
         matchLabels:
             com.docker.compose.project: infra
-            com.docker.compose.service: retrieval-svc
+            com.docker.compose.service: knowledge-engine
     strategy:
         type: Recreate
     template:
         metadata:
             labels:
                 com.docker.compose.project: infra
-                com.docker.compose.service: retrieval-svc
+                com.docker.compose.service: knowledge-engine
                 com.docker.compose.network.default: "true"
         spec:
             containers:
-                - name: retrieval-svc
-                  image: infra-retrieval-svc
+                - name: knowledge-engine
+                  image: infra-knowledge-engine
                   imagePullPolicy: IfNotPresent
                   env:
                     - name: DB_HOST
@@ -40,8 +40,6 @@ spec:
                       value: "${DB_USER}"
                     - name: EMBEDDINGS_MODEL
                       value: "${EMBEDDINGS_MODEL}"
-                    - name: OPENAI_API_KEY
-                      value: "${OPENAI_API_KEY}"
                   ports:
-                    - name: retrieval-8081
+                    - name: knowledge-8081
                       containerPort: 8081

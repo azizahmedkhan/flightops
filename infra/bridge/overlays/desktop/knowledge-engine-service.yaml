@@ -1,9 +1,9 @@
-#! retrieval-svc-service.yaml
+#! knowledge-engine-service.yaml
 # Generated code, do not edit
 apiVersion: v1
 kind: Service
 metadata:
-    name: retrieval-svc-published
+    name: knowledge-engine-published
     namespace: infra
 spec:
     type: LoadBalancer

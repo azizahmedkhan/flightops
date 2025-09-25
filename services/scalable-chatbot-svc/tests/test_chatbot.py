@@ -16,7 +16,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from main import app, manager, redis_manager, rate_limiter, llm_client
-from utils import (
+from chatbot_toolkit import (
     fetch_flight_context, 
     fetch_policy_context, 
     calculate_query_hash,
@@ -435,7 +435,7 @@ class TestKnowledgeBaseIntegration(TestChatbotService):
             
             # Configure mock client to return different responses for different URLs
             async def mock_post(url, **kwargs):
-                if "retrieval-svc" in url:
+                if "knowledge-engine" in url:
                     return mock_kb_response
                 else:
                     return mock_llm_response

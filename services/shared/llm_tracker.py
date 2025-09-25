@@ -118,7 +118,7 @@ class LLMTracker:
         return wrapper
 
 
-def track_openai_call(service_name: str, model: str = "gpt-4o-mini"):
+def track_openai_call(service_name: str, model: str):
     """
     Decorator to track OpenAI API calls.
     

@@ -18,9 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-from shared.base_service import BaseService
-from shared.llm_client import LLMClient
-from shared.prompt_manager import PromptManager
+from services.shared.base_service import BaseService
+from services.shared.llm_client import LLMClient
+from services.shared.prompt_manager import PromptManager
 import os
 import debugpy
 
@@ -235,7 +235,7 @@ rate_limiter = RateLimiter(redis_manager)
 llm_client = LLMClient("scalable-chatbot-svc", model="gpt-4o-mini")
 
 # Environment variables for service URLs
-RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://retrieval-svc:8081")
+RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://knowledge-engine:8081")
 AGENT_SVC_URL = os.getenv("AGENT_SVC_URL", "http://agent-svc:8081")
 DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
@@ -406,9 +406,9 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             client_id
         )
         # Import the new utility functions
-        from utils import (fetch_kb_context, fetch_database_context, route_query, format_kb_response, 
-                          format_database_response, create_air_nz_system_prompt, format_air_nz_response, 
-                          add_heads_up_warning, get_safe_fallback_response)
+        from chatbot_toolkit import (fetch_kb_context, fetch_database_context, route_query, format_kb_response, 
+                                     format_database_response, create_air_nz_system_prompt, format_air_nz_response, 
+                                     add_heads_up_warning, get_safe_fallback_response)
         
         # Route the query to determine if it needs KB or flight status
         query_type = route_query(user_message)

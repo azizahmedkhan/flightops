@@ -1,23 +1,17 @@
-import sys
-import os
 import json
+import random
 from contextlib import asynccontextmanager
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
 
-import httpx
-import pandas as pd
 import psycopg
 from fastapi import HTTPException, Request
 from pydantic import BaseModel
 from psycopg_pool import ConnectionPool
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
-
-from base_service import BaseService
-from prompt_manager import PromptManager
-from llm_client import create_llm_client
-from utils import LATENCY, log_startup
+from services.shared.base_service import BaseService, LATENCY, log_startup
+from services.shared.prompt_manager import PromptManager
+from services.shared.llm_client import create_llm_client
 
 # Initialize base service
 service = BaseService("predictive-svc", "1.0.0")
@@ -29,11 +23,9 @@ DB_PORT = service.get_env_int("DB_PORT", 5432)
 DB_NAME = service.get_env_var("DB_NAME", "flightops")
 DB_USER = service.get_env_var("DB_USER", "postgres")
 DB_PASS = service.get_env_var("DB_PASS", "postgres")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
-CHAT_MODEL = service.get_env_var("CHAT_MODEL", "gpt-4o-mini")
 
 # Initialize LLM client
-llm_client = create_llm_client("predictive-svc", CHAT_MODEL)
+llm_client = create_llm_client("predictive-svc")
 
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
@@ -110,7 +102,6 @@ def get_weather_data(airport: str, date: str) -> Dict[str, Any]:
     base_weather = weather_conditions.get(airport, {"wind_speed": 15, "visibility": 10, "precipitation": 0.0, "conditions": "clear"})
     
     # Add some randomness to simulate changing conditions
-    import random
     base_weather["wind_speed"] += random.randint(-5, 10)
     base_weather["visibility"] += random.randint(-2, 2)
     base_weather["precipitation"] += random.uniform(-0.1, 0.2)
@@ -205,9 +196,6 @@ def generate_llm_insights(flight_data: Dict[str, Any], weather_data: Dict[str, A
                          crew_analysis: Dict[str, Any], aircraft_analysis: Dict[str, Any],
                          historical_data: Dict[str, Any]) -> Dict[str, Any]:
     """Use LLM to generate insights and recommendations"""
-    if not OPENAI_API_KEY:
-        # Fallback to rule-based analysis
-        return generate_rule_based_insights(flight_data, weather_data, crew_analysis, aircraft_analysis, historical_data)
     
     try:
         prompt = PromptManager.get_disruption_prediction_prompt(

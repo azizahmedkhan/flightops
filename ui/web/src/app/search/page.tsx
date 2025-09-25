@@ -32,8 +32,11 @@ interface SearchResult {
 }
 
 interface SearchResponse {
-  mode: 'vector' | 'keyword'
+  mode: string
   results: SearchResult[]
+  embeddingsAvailable?: boolean
+  categoryCounts?: Record<string, number>
+  totalDocuments?: number
 }
 
 export default function SearchPage() {
@@ -57,7 +60,7 @@ export default function SearchPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          q: data.query,
+          query: data.query,
           k: data.limit
         })
       })
@@ -66,9 +69,44 @@ export default function SearchPage() {
         throw new Error('Failed to search')
       }
 
-      const result = await res.json()
-      setResponse(result)
-      toast.success(`Found ${result.results.length} results`)
+      const rawResult = await res.json()
+
+      if (!Array.isArray(rawResult?.results)) {
+        console.error('Unexpected search response payload:', rawResult)
+        throw new Error('Unexpected search response payload')
+      }
+
+      const normalizedResults: SearchResult[] = rawResult.results.map((item: any, index: number) => {
+        const rawDocId = typeof item.doc_id === 'number' ? item.doc_id : Number(item.doc_id)
+        const docId = Number.isFinite(rawDocId) ? rawDocId : index
+
+        return {
+          doc_id: docId,
+          title: typeof item.title === 'string' ? item.title : 'Untitled Document',
+          snippet: typeof item.snippet === 'string'
+            ? item.snippet
+            : typeof item.content === 'string'
+              ? item.content
+              : '',
+          meta: typeof item.meta === 'object' && item.meta !== null ? item.meta : {},
+          score: typeof item.score === 'number' ? item.score : undefined
+        }
+      })
+
+      const normalizedResponse: SearchResponse = {
+        mode: typeof rawResult.mode === 'string' ? rawResult.mode : 'unknown',
+        results: normalizedResults,
+        embeddingsAvailable: typeof rawResult.embeddings_available === 'boolean'
+          ? rawResult.embeddings_available
+          : undefined,
+        categoryCounts: rawResult.category_counts ?? undefined,
+        totalDocuments: typeof rawResult.total_documents === 'number'
+          ? rawResult.total_documents
+          : undefined
+      }
+
+      setResponse(normalizedResponse)
+      toast.success(`Found ${normalizedResponse.results.length} results`)
     } catch (error) {
       toast.error('Failed to search. Please try again.')
       console.error('Search error:', error)
@@ -90,6 +128,23 @@ export default function SearchPage() {
     if (score > 0.6) return 'Good'
     if (score > 0.4) return 'Fair'
     return 'Poor'
+  }
+
+  const getModeLabel = (mode: string) => {
+    switch (mode) {
+      case 'vector':
+        return 'Vector Search'
+      case 'keyword':
+        return 'Keyword Search'
+      case 'hybrid':
+        return 'Hybrid Search'
+      case 'bm25_only':
+        return 'Keyword Search (BM25)'
+      case 'no_data':
+        return 'Knowledge Base Unavailable'
+      default:
+        return 'Search'
+    }
   }
 
   return (
@@ -196,7 +251,7 @@ export default function SearchPage() {
                     <div className="flex items-center space-x-4 text-sm text-gray-600">
                       <div className="flex items-center">
                         <Database className="h-4 w-4 mr-1" />
-                        {response.mode === 'vector' ? 'Vector Search' : 'Keyword Search'}
+                        {getModeLabel(response.mode)}
                       </div>
                       <div className="flex items-center">
                         <FileText className="h-4 w-4 mr-1" />

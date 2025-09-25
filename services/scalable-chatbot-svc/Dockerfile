@@ -1,5 +1,9 @@
 FROM python:3.11-slim-bullseye
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 WORKDIR /app
 
 # Install system dependencies and security updates
@@ -15,17 +19,14 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser
 
+COPY services/ /app/services/
+
+WORKDIR /app/services/scalable-chatbot-svc
+
 # Copy requirements and install Python dependencies
-COPY services/scalable-chatbot-svc/requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
     && pip cache purge
-
-# Copy shared modules
-COPY services/shared /app/shared
-
-# Copy service code
-COPY services/scalable-chatbot-svc/ .
 
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app

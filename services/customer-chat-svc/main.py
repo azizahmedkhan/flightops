@@ -1,5 +1,3 @@
-import sys
-import os
 import json
 import uuid
 from datetime import datetime
@@ -9,11 +7,8 @@ import httpx
 from fastapi import Request, HTTPException
 from pydantic import BaseModel
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'shared'))
-sys.path.append(os.path.dirname(__file__))
-
-from base_service import BaseService
-from utils import (
+from services.shared.base_service import BaseService
+from conversation_logic import (
     generate_natural_language_response,
     lookup_flight_data,
     lookup_policy_data,
@@ -27,7 +22,7 @@ app = service.get_app()
 # Get environment variables using the base service
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://retrieval-svc:8081")
+RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://knowledge-engine:8081")
 
 # In-memory storage for demo purposes (in production, use Redis or database)
 chat_sessions = {}

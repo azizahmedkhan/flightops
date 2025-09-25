@@ -15,7 +15,7 @@ The project is composed of the following services:
 
 - **`gateway-api`**: The main entry point for the application, routing requests to the appropriate backend services.
 - **`agent-svc`**: The core agent that orchestrates the workflow, using tools to interact with other services and the database.
-- **`retrieval-svc`**: Handles the Retrieval Augmented Generation (RAG) by performing hybrid search on documents and data.
+- **`knowledge-engine`**: Handles the Retrieval Augmented Generation (RAG) by performing hybrid search on documents and data.
 - **`comms-svc`**: Responsible for generating grounded communications.
 - **`ingest-svc`**: Ingests data and documents into the PostgreSQL database and builds the vector index.
 - **`customer-chat-svc`**: A service for customer-facing chat functionality.

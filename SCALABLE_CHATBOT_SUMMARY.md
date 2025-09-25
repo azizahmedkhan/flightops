@@ -200,7 +200,7 @@ scalable-chatbot-svc:
   ports: ["8088:8088"]
   depends_on:
     - redis
-    - retrieval-svc
+    - knowledge-engine
     - agent-svc
     - comms-svc
 ```

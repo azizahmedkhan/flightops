@@ -1,10 +1,29 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Histogram
 import os
 import logging
 from typing import Optional
+
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["service", "path", "method", "code"],
+)
+LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency",
+    ["service", "path", "method"],
+)
+
+ENV_KEYS_TO_LOG = [
+    "DB_HOST",
+    "DB_NAME",
+    "CHAT_MODEL",
+    "EMBEDDINGS_MODEL",
+    "ALLOW_UNGROUNDED_ANSWERS",
+]
 
 class BaseService:
     """Base service class with common functionality for all microservices"""
@@ -20,6 +39,8 @@ class BaseService:
         self._setup_cors()
         self._setup_logging()
         self._setup_routes()
+        self.request_count = REQUEST_COUNT
+        self.latency_histogram = LATENCY
     
     def _setup_cors(self):
         """Setup CORS middleware for all services"""
@@ -82,7 +103,7 @@ class BaseService:
     def log_error(self, error: Exception, context: str = ""):
         """Log errors with context"""
         self.logger.error(f"Error in {context}: {str(error)}", exc_info=True)
-    
+
     def get_env_var(self, key: str, default: Optional[str] = None) -> str:
         """Get environment variable with logging"""
         value = os.getenv(key, default)
@@ -102,3 +123,25 @@ class BaseService:
         """Get environment variable as boolean"""
         value = self.get_env_var(key, str(default)).lower()
         return value in ('true', '1', 'yes', 'on')
+
+    def log_startup(self):
+        """Emit startup information for the service"""
+        env_snapshot = {
+            key: value
+            for key, value in os.environ.items()
+            if key in ENV_KEYS_TO_LOG and value is not None
+        }
+        self.logger.info("%s starting...", self.service_name)
+        self.logger.info("ENV snapshot: %s", env_snapshot)
+
+
+def log_startup(service_name: str):
+    """Module-level helper to preserve backwards compatibility"""
+    logger = logging.getLogger(service_name)
+    env_snapshot = {
+        key: value
+        for key, value in os.environ.items()
+        if key in ENV_KEYS_TO_LOG and value is not None
+    }
+    logger.info("%s starting...", service_name)
+    logger.info("ENV snapshot: %s", env_snapshot)

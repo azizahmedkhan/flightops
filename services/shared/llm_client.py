@@ -20,18 +20,18 @@ except ImportError:  # pragma: no cover - fallback for path-based imports
 class LLMClient:
     """Centralized LLM client with built-in logging and tracking."""
     
-    def __init__(self, service_name: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
+    def __init__(self, service_name: str, api_key: Optional[str] = None, model: Optional[str] = None):
         """
         Initialize the LLM client.
         
         Args:
             service_name: Name of the service using this client
             api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
-            model: Default model to use for completions
+            model: Default model to use for completions (overrides CHAT_MODEL env var when provided)
         """
         self.service_name = service_name
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.model = model
+        self.model = model or os.getenv("CHAT_MODEL", "gpt-4o-mini")
         self.gateway_url = os.getenv("GATEWAY_URL", "http://gateway-api:8080")
         
         if not self.api_key:
@@ -386,5 +386,5 @@ class LLMClient:
 
 
 # Convenience function to create a client for a service
-def create_llm_client(service_name: str, model: str = "gpt-4o-mini") -> LLMClient:
+def create_llm_client(service_name: str, model: Optional[str] = None) -> LLMClient:
     return LLMClient(service_name=service_name, model=model)

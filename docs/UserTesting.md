@@ -91,7 +91,7 @@ curl http://localhost:8081/metrics | head -n 20
 
 Look for:
 - `http_requests_total{service="agent-svc"...}`  
-- `http_request_latency_seconds_bucket{service="retrieval-svc"...}`
+- `http_request_latency_seconds_bucket{service="knowledge-engine"...}`
 
 ---
 

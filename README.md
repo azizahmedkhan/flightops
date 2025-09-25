@@ -58,7 +58,7 @@ docker compose up --build
 
 Services:
 - http://localhost:8080 -> **gateway-api** (OpenAPI docs at `/docs`)
-- http://localhost:8081 -> **retrieval-svc** (OpenAPI)
+- http://localhost:8081 -> **knowledge-engine** (OpenAPI)
 - http://localhost:8082 -> **agent-svc** (OpenAPI)
 - http://localhost:8083 -> **comms-svc** (OpenAPI)
 - http://localhost:5173 -> **web UI**
@@ -96,7 +96,7 @@ Each service exposes `/metrics`. You can add a Prometheus server to scrape these
 flightops-copilot/
   services/
     gateway-api/          # entrypoint + auth + routes
-    retrieval-svc/        # RAG: hybrid search + citations
+    knowledge-engine/     # Knowledge engine: hybrid search + SQL tools
     agent-svc/            # tool-using agent orchestration
     comms-svc/            # grounded comms drafts
     ingest-svc/           # load datasets + docs -> pgvector
@@ -258,7 +258,7 @@ Count affected bookings and crew from DB.
 That’s deterministic logic in agent-svc (fast, reliable).
 
 #Remedy rules = from policies, retrieved (RAG), not “decided” by AI.
-retrieval-svc pulls the relevant policy snippets (citations).
+knowledge-engine pulls the relevant policy snippets (citations).
 You enforce: no citations ⇒ no action (guardrail).
 
 #Communication wording = template first, AI optional.
