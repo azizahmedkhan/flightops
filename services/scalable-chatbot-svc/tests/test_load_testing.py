@@ -67,7 +67,7 @@ class LoadTestResults:
 class ChatbotLoadTester:
     """Load testing class for the chatbot service"""
     
-    def __init__(self, base_url: str = "http://localhost:8088"):
+    def __init__(self, base_url: str = "http://localhost:3000"):
         self.base_url = base_url
         self.ws_url = base_url.replace("http", "ws")
         self.results = LoadTestResults()

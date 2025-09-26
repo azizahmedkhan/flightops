@@ -9,7 +9,7 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "fastapi==0.111.0",
-        "uvicorn[standard]==0.30.1",
+        "uvicorn==0.30.1",
         "pydantic==2.7.1",
         "httpx==0.27.0",
         "python-dotenv==1.0.1",

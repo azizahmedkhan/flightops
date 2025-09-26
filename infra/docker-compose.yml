@@ -27,7 +27,7 @@ services:
     env_file:
       - ../.env
     environment:
-      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - CHAT_MODEL=${CHAT_MODEL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - EMBEDDINGS_MODEL=${EMBEDDINGS_MODEL}
       - DB_HOST=${DB_HOST}
