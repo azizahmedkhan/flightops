@@ -57,13 +57,13 @@ Add knowledge base support to your existing Postgres database:
 3. The tables should integrate with your existing database and use the same connection patterns as your other services.
 ```
 
-### **Phase 3: Enhance Existing Retrieval Service**
+### **Phase 3: Enhance Existing Knowledge Service**
 
-**Prompt 3: Add Knowledge Base Search to Existing Retrieval Service**
+**Prompt 3: Add Knowledge Base Search to Existing Knowledge Service**
 ```
-Enhance your existing retrieval-svc to support knowledge base search alongside your current functionality:
+Enhance your existing knowledge-engine to support knowledge base search alongside your current functionality:
 
-1. Add new endpoints to services/retrieval-svc/main.py:
+1. Add new endpoints to services/knowledge-engine/main.py:
    - POST /kb/search - for knowledge base search
    - GET /kb/documents - list available documents
    - POST /kb/ingest - ingest documents from /data/docs
@@ -76,9 +76,9 @@ Enhance your existing retrieval-svc to support knowledge base search alongside y
 ```
 
 
-**Prompt 2: Add Knowledge Base Search to Existing Retrieval Service**
+**Prompt 2: Add Knowledge Base Search to Existing Knowledge Service**
 ```
-Enhance the existing services/retrieval-svc/main.py to support knowledge base search:
+Enhance the existing services/knowledge-engine/main.py to support knowledge base search:
 
 1. Add new endpoints:
    - POST /kb/search - search all documents
@@ -173,7 +173,7 @@ Enhance the existing caching system in scalable-chatbot-svc:
    - 60-120 minute TTL
    - Use existing Redis setup
 
-2. Add retrieval cache:
+2. Add knowledge search cache:
    - Cache normalized questions → top-k doc IDs
    - 10-30 minute TTL
    - Reduce duplicate KB searches
@@ -228,7 +228,7 @@ Create comprehensive testing and demo scripts:
 1. **Use existing `/data/docs` structure** instead of creating new `kb/` folder
 2. **Complement existing operational docs** rather than replace them
 3. **Leverage existing database and Redis setup** 
-4. **Integrate with existing retrieval-svc** rather than creating separate KB service
+4. **Integrate with existing knowledge-engine** rather than creating separate KB service
 5. **Build on existing scalable-chatbot-svc** architecture
 
 ## Quick Start Commands (Revised)
@@ -284,7 +284,7 @@ Modify the existing services/ingest-svc/main.py to support the scalable-chat kno
 Enhance the existing services/scalable-chatbot-svc to integrate with the knowledge base:
 
 1. Add new functions to services/scalable-chatbot-svc/utils.py:
-   - `fetch_kb_context(query: str)` - search knowledge base via retrieval-svc
+   - `fetch_kb_context(query: str)` - search knowledge base via knowledge-engine
    - `route_query(message: str)` - determine if query needs KB or flight status
    - `format_kb_response(chunks, sources)` - format KB responses with citations
 

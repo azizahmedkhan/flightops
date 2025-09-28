@@ -250,7 +250,7 @@ Features:
 
 The chatbot integrates seamlessly with existing FlightOps services:
 
-- **Retrieval Service**: Policy and document context
+- **Knowledge Service**: Policy and document context
 - **Agent Service**: Flight data and operations
 - **Communications Service**: Sentiment analysis and tone
 - **Redis**: Session management and caching

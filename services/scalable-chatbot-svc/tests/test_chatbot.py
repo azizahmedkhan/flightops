@@ -288,7 +288,7 @@ class TestContextManagement(TestChatbotService):
             
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
             
-            policies = await fetch_policy_context("refund policy", "http://test-retrieval")
+            policies = await fetch_policy_context("refund policy", "http://test-knowledge-service")
             
             assert policies is not None
             assert len(policies) == 1
@@ -338,7 +338,7 @@ class TestKnowledgeBaseIntegration(TestChatbotService):
             
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
             
-            kb_chunks = await fetch_kb_context("baggage allowance", "http://test-retrieval")
+            kb_chunks = await fetch_kb_context("baggage allowance", "http://test-knowledge-service")
             
             assert kb_chunks is not None
             assert len(kb_chunks) == 1

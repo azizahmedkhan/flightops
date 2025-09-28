@@ -14,7 +14,7 @@ FlightOps leverages AI and LLM technology to transform airline irregular operati
 
 ## Current AI Use Cases (Implemented)
 
-### 1. Retrieval-Augmented Generation (RAG) for Policy Knowledge
+### 1. Knowledge-Augmented Generation (RAG) for Policy Knowledge
 **Service**: `knowledge-engine`  
 **Purpose**: Instant access to airline policies and procedures
 
@@ -26,7 +26,7 @@ FlightOps leverages AI and LLM technology to transform airline irregular operati
 
 **AI-Enhanced Process**:
 - Semantic search through policy documents
-- Instant retrieval with citations
+- Instant knowledge search with citations
 - Always up-to-date information
 - Consistent policy application
 

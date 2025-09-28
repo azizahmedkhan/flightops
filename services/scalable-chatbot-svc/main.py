@@ -71,7 +71,7 @@ async def lifespan(_app: FastAPI):
 app.router.lifespan_context = lifespan
 
 # Environment variables for service URLs
-RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://knowledge-engine:8081")
+KNOWLEDGE_SERVICE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://knowledge-engine:8081")
 DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
 # Pydantic models
@@ -244,7 +244,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         db_response = None
         
         if query_type == "kb":
-            kb_chunks = await fetch_kb_context(user_message, RETRIEVAL_SVC_URL)
+            kb_chunks = await fetch_kb_context(user_message, KNOWLEDGE_SERVICE_URL)
             if kb_chunks:
                 response_metadata["kb_context"] = kb_chunks
                 # Format KB response with Air New Zealand style citations

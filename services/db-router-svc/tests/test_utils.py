@@ -131,8 +131,8 @@ class TestIATACodeValidation:
         assert validate_iata_code(None) is False
 
 
-class TestCityNameRetrieval:
-    """Test city name retrieval from IATA codes."""
+class TestCityNameLookup:
+    """Test city name lookup from IATA codes."""
     
     def test_get_city_name(self):
         """Test getting city name from IATA code."""

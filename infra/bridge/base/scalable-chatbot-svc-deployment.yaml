@@ -40,8 +40,8 @@ spec:
                       value: "${OPENAI_API_KEY}"
                     - name: REDIS_URL
                       value: "${REDIS_URL}"
-                    - name: RETRIEVAL_URL
-                      value: "${RETRIEVAL_URL}"
+                    - name: KNOWLEDGE_SERVICE_URL
+                      value: "${KNOWLEDGE_SERVICE_URL}"
                   livenessProbe:
                     exec:
                         command: ['curl -f http://localhost:8088/health']

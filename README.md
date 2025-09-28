@@ -1,7 +1,7 @@
 # FlightOps Copilot — Business Functionality
 
 **FlightOps Copilot** is an AI-powered assistant designed to help airlines manage **irregular operations (IRROPs)** such as delays, cancellations, and weather disruptions.  
-It combines **retrieval-augmented generation (RAG)**, **tool-using agents**, and **enterprise guardrails** to support both operations staff and customer service teams.
+It combines **knowledge-augmented generation (RAG)**, **tool-using agents**, and **enterprise guardrails** to support both operations staff and customer service teams.
 
 ### Key Business Use Cases
 - **Operational Decision Support**  
@@ -30,13 +30,13 @@ It combines **retrieval-augmented generation (RAG)**, **tool-using agents**, and
 
 A production-style, **agentic GenAI** demo tailored for airline operations (e.g., Air New Zealand) to showcase:
 - Python microservices (FastAPI) + Docker
-- Retrieval Augmented Generation (RAG) with **pgvector**
+- Knowledge Augmented Generation (RAG) with **pgvector**
 - Agent with **tool calls** (flight lookup, impact assessment, rebooking options, comms drafting, policy grounding)
 - Guardrails (PII redaction, prompt-injection filter, grounding + citations)
 - Observability (structured logs + Prometheus metrics endpoints)
 - Minimal React UI (Vite + Tailwind) for a crisp demo
 
-> **Note:** LLM features use OpenAI by default via environment variables. If no key is provided, the app falls back to simple keyword retrieval & mock LLM responses so you can still demo end-to-end flows.
+> **Note:** LLM features use OpenAI by default via environment variables. If no key is provided, the app falls back to simple keyword search & mock LLM responses so you can still demo end-to-end flows.
 
 ## Quick Start
 
@@ -66,7 +66,7 @@ Services:
 
 Gateway: http://localhost:8080/docs
 
-Retrieval: http://localhost:8081/docs
+Knowledge Engine: http://localhost:8081/docs
 
 Agent: http://localhost:8082/docs
 
@@ -247,7 +247,7 @@ The AI Agent (The "Brain"): The entire process is orchestrated by the AI agent. 
 
 Impact Assessment & Constraint Checking: These primarily use standard database queries (SQL), but the AI's LLM is used to synthesize the raw data from those queries into a natural language summary for the operator.
 
-Policy & Procedure Lookup: This is a classic RAG (Retrieval-Augmented Generation) use case. The system performs a vector search to find relevant policy documents, and the AI's LLM summarizes the findings.
+Policy & Procedure Lookup: This is a classic RAG (Knowledge-Augmented Generation) use case. The system performs a vector search to find relevant policy documents, and the AI's LLM summarizes the findings.
 
 Solution Generation: The agent might call a non-AI tool like OR-Tools, but it uses the LLM's reasoning and world knowledge to frame the problem for the optimizer and to interpret the results (e.g., adding pros and cons).
 
@@ -264,7 +264,7 @@ You enforce: no citations ⇒ no action (guardrail).
 #Communication wording = template first, AI optional.
 comms-svc renders Email/SMS via template.
 If a key is present, you may run a single AI rewrite to polish tone; otherwise skip.
-So: we don’t ask AI to “figure out effects.” We compute impact with code, ground remedies in policy via retrieval, and optionally polish wording with AI.
+So: we don't ask AI to "figure out effects." We compute impact with code, ground remedies in policy via knowledge service, and optionally polish wording with AI.
 
 
 

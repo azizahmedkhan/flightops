@@ -32,8 +32,8 @@ spec:
                       value: "${AGENT_URL}"
                     - name: COMMS_URL
                       value: "${COMMS_URL}"
-                    - name: RETRIEVAL_URL
-                      value: "${RETRIEVAL_URL}"
+                    - name: KNOWLEDGE_SERVICE_URL
+                      value: "${KNOWLEDGE_SERVICE_URL}"
                   ports:
                     - name: customer-c-8087
                       containerPort: 8087

@@ -26,12 +26,12 @@ async def fetch_flight_context(flight_no: str, date: str, agent_url: str) -> Opt
     return None
 
 
-async def fetch_policy_context(query: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
-    """Fetch policy context from retrieval service"""
+async def fetch_policy_context(query: str, knowledge_service_url: str) -> Optional[List[Dict[str, Any]]]:
+    """Fetch policy context from knowledge service"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{retrieval_url}/search",
+                f"{knowledge_service_url}/search",
                 json={"q": query, "k": 3}
             )
             if response.status_code == 200:
@@ -247,12 +247,12 @@ def create_response_template(response_type: str, session_id: str) -> Dict[str, A
     return base_template
 
 
-async def fetch_kb_context(query: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
+async def fetch_kb_context(query: str, knowledge_service_url: str) -> Optional[List[Dict[str, Any]]]:
     """Search knowledge base via knowledge-engine"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{retrieval_url}/kb/search",
+                f"{knowledge_service_url}/kb/search",
                 json={"q": query, "k": 3}
             )
             if response.status_code == 200:

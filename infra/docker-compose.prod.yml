@@ -56,7 +56,7 @@ services:
       dockerfile: services/agent-svc/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV}
-      - RETRIEVAL_URL=${RETRIEVAL_URL}
+      - KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL}
       - COMMS_URL=${COMMS_URL}
       - CHAT_MODEL=${CHAT_MODEL}
       - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS}
@@ -168,7 +168,7 @@ services:
       - DB_USER=${DB_USER}
       - DB_PASS=${DB_PASS}
       - AGENT_URL=${AGENT_URL}
-      - RETRIEVAL_URL=${RETRIEVAL_URL}
+      - KNOWLEDGE_SERVICE_URL=${KNOWLEDGE_SERVICE_URL}
       - COMMS_URL=${COMMS_URL}
       - INGEST_URL=${INGEST_URL}
       - CUSTOMER_CHAT_URL=${CUSTOMER_CHAT_URL}

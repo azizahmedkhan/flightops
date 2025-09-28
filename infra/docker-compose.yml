@@ -60,7 +60,7 @@ services:
     environment:
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - RETRIEVAL_URL=http://knowledge-engine:8081
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-engine:8081
       - COMMS_URL=http://comms-svc:8083
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
       - ALLOW_UNGROUNDED_ANSWERS=${ALLOW_UNGROUNDED_ANSWERS:-true}
@@ -96,7 +96,7 @@ services:
     environment:
       - COMMS_URL=http://comms-svc:8083
       - AGENT_URL=http://agent-svc:8082
-      - RETRIEVAL_URL=http://knowledge-engine:8081
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-engine:8081
     depends_on:
       agent-svc:
         condition: service_started
@@ -157,7 +157,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=redis://redis:6379
       - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
-      - RETRIEVAL_SVC_URL=http://knowledge-engine:8081
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-engine:8081
       - AGENT_SVC_URL=http://agent-svc:8081
       - DB_ROUTER_URL=http://db-router-svc:8000
       - DEBUGPY=true
@@ -209,7 +209,7 @@ services:
     
     environment:
       - AGENT_URL=http://agent-svc:8082
-      - RETRIEVAL_URL=http://knowledge-engine:8081
+      - KNOWLEDGE_SERVICE_URL=http://knowledge-engine:8081
       - COMMS_URL=http://comms-svc:8083
       - INGEST_URL=http://ingest-svc:8084
       - CUSTOMER_CHAT_URL=http://customer-chat-svc:8087

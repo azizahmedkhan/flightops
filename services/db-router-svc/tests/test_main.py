@@ -191,7 +191,7 @@ class TestSmartQueryEndpoint:
             data = response.json()
             assert data["intent"] == "knowledge_base"
             assert data["rows"][0]["title"] == "Refund Policy"
-            assert data["metadata"]["retrieval"]["mode"] == "hybrid"
+            assert data["metadata"]["knowledge_service"]["mode"] == "hybrid"
             assert "refund" in data["answer"].lower()
 
     def test_smart_query_invalid_args(self, client):

@@ -54,8 +54,8 @@ spec:
                       value: "${OPENAI_API_KEY}"
                     - name: PREDICTIVE_URL
                       value: "${PREDICTIVE_URL}"
-                    - name: RETRIEVAL_URL
-                      value: "${RETRIEVAL_URL}"
+                    - name: KNOWLEDGE_SERVICE_URL
+                      value: "${KNOWLEDGE_SERVICE_URL}"
                   ports:
                     - name: gateway-ap-8080
                       containerPort: 8080

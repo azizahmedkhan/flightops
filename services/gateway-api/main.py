@@ -23,7 +23,7 @@ app = service.get_app()
 
 # Get environment variables using the base service
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://knowledge-engine:8081")
+KNOWLEDGE_SERVICE_URL = service.get_env_var("KNOWLEDGE_SERVICE_URL", "http://knowledge-engine:8081")
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 INGEST_URL = service.get_env_var("INGEST_URL", "http://ingest-svc:8084")
 CUSTOMER_CHAT_URL = service.get_env_var("CUSTOMER_CHAT_URL", "http://customer-chat-svc:8085")
@@ -611,7 +611,7 @@ async def draft_comms(payload: dict, request: Request):
 async def search(payload: dict, request: Request):
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.post(f"{RETRIEVAL_URL}/search", json=payload, timeout=30.0)
+            r = await client.post(f"{KNOWLEDGE_SERVICE_URL}/search", json=payload, timeout=30.0)
             if r.status_code >= 400:
                 message = None
                 try:

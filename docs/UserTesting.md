@@ -16,7 +16,7 @@ Follow these steps after the system is running with `docker compose up --build`.
 ## 1. Health & Docs
 Open Swagger UI for each service:
 - Gateway: http://localhost:8080/docs  
-- Retrieval: http://localhost:8081/docs  
+- Knowledge Engine: http://localhost:8081/docs  
 - Agent: http://localhost:8082/docs  
 - Comms: http://localhost:8083/docs  
 - Ingest: http://localhost:8084/docs
@@ -35,7 +35,7 @@ curl http://localhost:8080/demo/seed
 
 ---
 
-## 3. Retrieval Service
+## 3. Knowledge Engine Service
 Search policies directly:
 ```bash
 curl -s http://localhost:8081/search -H 'content-type: application/json'   -d '{"q":"compensation for weather delay","k":3}' | jq
@@ -115,4 +115,4 @@ docker compose -f infra/docker-compose.yml up -d --build agent-svc
 
 ---
 
-✅ With this guide, you can test **every major capability**: retrieval, agent tools, comms drafting, guardrails, observability, and data-driven variation.
+✅ With this guide, you can test **every major capability**: knowledge search, agent tools, comms drafting, guardrails, observability, and data-driven variation.

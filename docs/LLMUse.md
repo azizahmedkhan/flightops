@@ -1,6 +1,6 @@
 This project already implements several LLM use cases:
 
-### 1. **RAG (Retrieval-Augmented Generation)**
+### 1. **RAG (Knowledge-Augmented Generation)**
 - **Service**: `knowledge-engine`
 - **Purpose**: Semantic search through policy documents and SOPs
 - **Implementation**: Hybrid search combining BM25 and vector embeddings
@@ -324,7 +324,7 @@ The system leverages LLM in several sophisticated ways:
 ```
 
 #### 2. **Policy Grounding** (`tool_policy_grounder`)
-- Uses retrieval service to find relevant policy documents
+- Uses knowledge service to find relevant policy documents
 - Ensures responses are grounded in actual airline policies
 - Prevents hallucination by requiring citations
 
@@ -351,7 +351,7 @@ The system leverages LLM in several sophisticated ways:
 
 ### **Strengths:**
 1. **Hybrid Approach**: Combines LLM with rule-based fallbacks
-2. **Policy Grounding**: Prevents hallucination through retrieval-augmented generation
+2. **Policy Grounding**: Prevents hallucination through knowledge-augmented generation
 3. **Multi-Service Integration**: LLM used across multiple specialized services
 4. **Graceful Degradation**: Falls back to rule-based systems when LLM unavailable
 

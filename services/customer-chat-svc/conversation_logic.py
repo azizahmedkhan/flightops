@@ -292,11 +292,11 @@ def lookup_flight_data(flight_no: str, date: str, agent_url: str) -> Optional[Di
     
     return None
 
-def lookup_policy_data(question: str, retrieval_url: str) -> Optional[List[Dict[str, Any]]]:
-    """Look up policy data from the retrieval service."""
+def lookup_policy_data(question: str, knowledge_service_url: str) -> Optional[List[Dict[str, Any]]]:
+    """Look up policy data from the knowledge service."""
     try:
         response = httpx.post(
-            f"{retrieval_url}/search",
+            f"{knowledge_service_url}/search",
             json={
                 "q": question + " policy compensation rebooking",
                 "k": 3

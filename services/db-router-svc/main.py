@@ -37,7 +37,7 @@ llm_client: LLMClient = None
 query_router: QueryRouter = None
 base_service: BaseService = None
 
-RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://knowledge-engine:8081")
+KNOWLEDGE_SERVICE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://knowledge-engine:8081")
 try:
     DEFAULT_KB_TOP_K = int(os.getenv("KB_TOP_K", "5"))
 except ValueError:
@@ -62,15 +62,15 @@ async def lifespan(app: FastAPI):
         # Initialize query router
         query_router = QueryRouter(llm_client)
 
-        # Configure retrieval service for knowledge base lookups
-        global RETRIEVAL_SVC_URL, DEFAULT_KB_TOP_K
-        RETRIEVAL_SVC_URL = base_service.get_env_var("RETRIEVAL_SVC_URL", RETRIEVAL_SVC_URL)
+        # Configure knowledge service for knowledge base lookups
+        global KNOWLEDGE_SERVICE_URL, DEFAULT_KB_TOP_K
+        KNOWLEDGE_SERVICE_URL = base_service.get_env_var("KNOWLEDGE_SERVICE_URL", KNOWLEDGE_SERVICE_URL)
         try:
             DEFAULT_KB_TOP_K = int(base_service.get_env_var("KB_TOP_K", str(DEFAULT_KB_TOP_K)))
         except ValueError:
             DEFAULT_KB_TOP_K = 5
         logger.info(
-            f"Knowledge base retrieval configured: url={RETRIEVAL_SVC_URL}, default_top_k={DEFAULT_KB_TOP_K}"
+            f"Knowledge base service configured: url={KNOWLEDGE_SERVICE_URL}, default_top_k={DEFAULT_KB_TOP_K}"
         )
 
         # Initialize database
@@ -135,7 +135,7 @@ def get_query_router() -> QueryRouter:
 
 
 async def query_knowledge_base(query: str, top_k: int = DEFAULT_KB_TOP_K) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Call retrieval service to fetch knowledge base snippets."""
+    """Call knowledge service to fetch knowledge base snippets."""
     sanitized_query = (query or "").strip()
     if not sanitized_query:
         return [], {"mode": "empty", "embeddings_available": False}
@@ -148,7 +148,7 @@ async def query_knowledge_base(query: str, top_k: int = DEFAULT_KB_TOP_K) -> Tup
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{RETRIEVAL_SVC_URL}/kb/search",
+                f"{KNOWLEDGE_SERVICE_URL}/kb/search",
                 json={"q": sanitized_query, "k": bounded_top_k}
             )
             response.raise_for_status()
@@ -370,7 +370,7 @@ async def smart_query(
 
             bounded_top_k = max(1, min(parsed_top_k, 20))
 
-            kb_rows, retrieval_meta = await query_knowledge_base(query_text, bounded_top_k)
+            kb_rows, knowledge_meta = await query_knowledge_base(query_text, bounded_top_k)
             kb_args.setdefault("query", query_text)
             kb_args["k"] = bounded_top_k
 
@@ -386,7 +386,7 @@ async def smart_query(
                 "confidence": route_response.confidence,
                 "intent": route_response.intent.value,
                 "args": kb_args,
-                "retrieval": retrieval_meta,
+                "knowledge_service": knowledge_meta,
                 "role": request.auth.get("role", "public")
             }
 

@@ -585,7 +585,7 @@ def passenger_profiles(payload: FlightLookupRequest, request: Request):
         return response
 
 
-# Compatibility alias for legacy retrieval clients
+# Compatibility alias for legacy knowledge service clients
 @app.post("/kb/search", response_model=SearchResponse)
 def kb_search(payload: SearchRequest, request: Request):
     return search_endpoint(payload, request)

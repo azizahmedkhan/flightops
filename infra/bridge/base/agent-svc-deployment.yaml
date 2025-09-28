@@ -36,8 +36,8 @@ spec:
                       value: "${COMMS_URL}"
                     - name: DB_HOST
                       value: "${DB_HOST}"
-                    - name: RETRIEVAL_URL
-                      value: "${RETRIEVAL_URL}"
+                    - name: KNOWLEDGE_SERVICE_URL
+                      value: "${KNOWLEDGE_SERVICE_URL}"
                   ports:
                     - name: agent-svc-8082
                       containerPort: 8082

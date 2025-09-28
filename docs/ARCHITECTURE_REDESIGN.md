@@ -15,9 +15,9 @@
 - Only external dependency: the Knowledge Engine over HTTP; no direct DB connections to keep latency predictable.
 
 ### 2. Knowledge Engine (`knowledge-engine`)
-- Combines what lives today in `retrieval-svc` + `db-router-svc` + embedding helpers.
+- Combines what lives today in `knowledge-engine` + `db-router-svc` + embedding helpers.
 - Responsibilities:
-  - Hybrid retrieval (pgvector similarity + lightweight BM25 backup).
+  - Hybrid knowledge search (pgvector similarity + lightweight BM25 backup).
   - SQL tool execution with parameterized queries against Postgres (flight, crew, disruption tables).
   - LLM tool surface: `search_policies`, `lookup_flight`, `fetch_booking`, etc., all exposed through a single `/tools/*` API consumed by Experience API.
   - Token usage + performance telemetry pushed to Loguru + Postgres.
@@ -32,14 +32,14 @@
 ## Supporting Pieces (Kept Minimal)
 - **Shared Utilities**: existing `services/shared` code becomes a small Python package so both Experience API and Knowledge Engine import identical logging, prompt, and LLM clients.
 - **Postgres**: single instance with two logical schemas—`core_ops` for operational data, `knowledge` for docs/embeddings.
-- **Redis (optional)**: enable if you want cached retrieval results; otherwise the system still runs without extra explanation.
+- **Redis (optional)**: enable if you want cached knowledge search results; otherwise the system still runs without extra explanation.
 
 ## Service Realignment Map (Old → New)
 
 | Current Service | Destination | Rationale |
 |-----------------|-------------|-----------|
 | `gateway-api`, `agent-svc`, `scalable-chatbot-svc`, `customer-chat-svc` | `experience-api` | Single front door, simpler story, no cross-service chatter during demo. |
-| `retrieval-svc`, `db-router-svc` (tooling portions) | `knowledge-engine` | Embeddings + SQL live together; exposes one toolbox for LLM calls. |
+| `knowledge-engine`, `db-router-svc` (tooling portions) | `knowledge-engine` | Embeddings + SQL live together; exposes one toolbox for LLM calls. |
 | `ingest-svc` | `ingestion-worker` | Background job runner; can be invoked manually before demo. |
 | `comms-svc`, `crew-svc`, `predictive-svc` | Defer / keep offline | Optional for demo; wire in later if needed, but not part of core story. |
 
@@ -62,13 +62,13 @@
 
 ## Why This Meets the Simplicity + Performance Goals
 - **Single customer-facing box** (Experience API) keeps diagrams obvious and reduces coordination latency.
-- **Embeddings + SQL co-located** eliminates cross-service hops during retrieval, making the demo snappy and easier to reason about.
+- **Embeddings + SQL co-located** eliminates cross-service hops during knowledge search, making the demo snappy and easier to reason about.
 - **Background ingestion** isolates slow work while still letting you demo continuous updates if asked.
 - **Shared utilities package** means you talk about one logging/prompting story instead of repeating yourself per service.
 
 ## Implementation Sequence (4 Steps)
 1. **Collapse to Experience API**: move chat routes + WebSocket streaming into one service; point UI at it.
-2. **Stand up Knowledge Engine**: merge retrieval + SQL tooling; define `/tools/*` contract; point Experience API to it.
+2. **Stand up Knowledge Engine**: merge knowledge search + SQL tooling; define `/tools/*` contract; point Experience API to it.
 3. **Spin up Ingestion Worker**: adapt current `ingest-svc` scripts to push into `knowledge` schema and notify Knowledge Engine.
 4. **Package Shared Utilities**: optional polish—bundle common code so the services stay small and interview-ready.
 

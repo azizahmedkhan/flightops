@@ -83,7 +83,7 @@ def categorize_document(filename: str) -> str:
         return "other"
 
 def chunk_text(text: str, chunk_size: int = 400, overlap: float = 0.15) -> List[str]:
-    """Split text into overlapping chunks for better retrieval."""
+    """Split text into overlapping chunks for better knowledge search."""
     # Simple word-based chunking
     words = text.split()
     chunk_size_words = chunk_size
@@ -373,7 +373,7 @@ def parse_markdown_files(kb_only: bool = False) -> Tuple[int, bool]:
                     "frontmatter": frontmatter
                 }
                 
-                # Chunk the content for better retrieval
+                # Chunk the content for better knowledge search
                 chunks = chunk_text(content_without_frontmatter, chunk_size=400, overlap=0.15)
                 
                 # Store each chunk as a separate document

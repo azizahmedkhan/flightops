@@ -18,7 +18,7 @@ service = BaseService("agent-svc", "1.0.0")
 app = service.get_app()
 
 # Get environment variables using the base service
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL")
+KNOWLEDGE_SERVICE_URL = service.get_env_var("KNOWLEDGE_SERVICE_URL")
 COMMS_URL = service.get_env_var("COMMS_URL")
 ALLOW_UNGROUNDED = service.get_env_bool("ALLOW_UNGROUNDED_ANSWERS", True)
 
@@ -30,10 +30,10 @@ KNOWLEDGE_ENGINE_TIMEOUT = 12.0
 
 def _post_knowledge_engine(path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Helper to call the knowledge engine service."""
-    if not RETRIEVAL_URL:
+    if not KNOWLEDGE_SERVICE_URL:
         raise HTTPException(status_code=500, detail="Knowledge engine URL not configured")
 
-    url = f"{RETRIEVAL_URL}{path}"
+    url = f"{KNOWLEDGE_SERVICE_URL}{path}"
     try:
         response = httpx.post(url, json=payload, timeout=KNOWLEDGE_ENGINE_TIMEOUT)
         response.raise_for_status()
@@ -405,9 +405,9 @@ def optimize_rebooking_rule_based(options: List[Dict[str, Any]], passenger_profi
 def tool_policy_grounder(question: str, k:int=3) -> Dict[str, Any]:
     try:
         print(f"DEBUG: Calling policy grounder with question: {question}")
-        print(f"DEBUG: RETRIEVAL_URL: {RETRIEVAL_URL}")
+        print(f"DEBUG: KNOWLEDGE_SERVICE_URL: {KNOWLEDGE_SERVICE_URL}")
         r = httpx.post(
-            f"{RETRIEVAL_URL}/search",
+            f"{KNOWLEDGE_SERVICE_URL}/search",
             json={"query": question, "k": k},
             timeout=10.0,
         )

@@ -22,7 +22,7 @@ app = service.get_app()
 # Get environment variables using the base service
 COMMS_URL = service.get_env_var("COMMS_URL", "http://comms-svc:8083")
 AGENT_URL = service.get_env_var("AGENT_URL", "http://agent-svc:8082")
-RETRIEVAL_URL = service.get_env_var("RETRIEVAL_URL", "http://knowledge-engine:8081")
+KNOWLEDGE_SERVICE_URL = service.get_env_var("KNOWLEDGE_SERVICE_URL", "http://knowledge-engine:8081")
 
 # In-memory storage for demo purposes (in production, use Redis or database)
 chat_sessions = {}
@@ -122,7 +122,7 @@ def send_chat_message(message: ChatMessage, req: Request):
             flight_data = lookup_flight_data(session["flight_no"], session["date"], AGENT_URL)
         
         if needs_policy_data:
-            policy_data = lookup_policy_data(message.message, RETRIEVAL_URL)
+            policy_data = lookup_policy_data(message.message, KNOWLEDGE_SERVICE_URL)
         
         # Generate natural language response using the new format
         natural_response = generate_natural_language_response(
@@ -510,7 +510,7 @@ class QARequest(BaseModel):
 
 @app.post("/qa")
 def qa(request: QARequest, req: Request):
-    """Narrow Q&A endpoint with retrieval-only answers (no state changes)"""
+    """Narrow Q&A endpoint with knowledge-only answers (no state changes)"""
     try:
         # Rate limiting check (simple in-memory for demo)
         client_ip = req.client.host if hasattr(req, 'client') else "unknown"
@@ -555,10 +555,10 @@ def qa(request: QARequest, req: Request):
         
         scrubbed_question = pii_scrub(request.question)
         
-        # Use retrieval service for policy grounding
+        # Use knowledge service for policy grounding
         try:
-            retrieval_response = httpx.post(
-                f"{RETRIEVAL_URL}/search",
+            knowledge_response = httpx.post(
+                f"{KNOWLEDGE_SERVICE_URL}/search",
                 json={
                     "q": scrubbed_question + " policy compensation rebooking",
                     "k": 3
@@ -566,9 +566,9 @@ def qa(request: QARequest, req: Request):
                 timeout=15.0
             )
             
-            if retrieval_response.status_code == 200:
-                retrieval_data = retrieval_response.json()
-                citations = retrieval_data.get("results", [])
+            if knowledge_response.status_code == 200:
+                knowledge_data = knowledge_response.json()
+                citations = knowledge_data.get("results", [])
                 
                 # Generate safe, limited response based on citations
                 if citations:
@@ -590,7 +590,7 @@ def qa(request: QARequest, req: Request):
                     "date": request.date,
                     "citations": citations,
                     "answered_at": current_time.isoformat(),
-                    "source": "retrieval_only"
+                    "source": "knowledge_only"
                 }
             else:
                 result = {
@@ -603,7 +603,7 @@ def qa(request: QARequest, req: Request):
                     "source": "fallback"
                 }
         except Exception as e:
-            service.log_error(e, "qa_retrieval")
+            service.log_error(e, "qa_knowledge_service")
             result = {
                 "question": scrubbed_question,
                 "answer": "I'm experiencing technical difficulties. Please contact our support team for assistance.",
