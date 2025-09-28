@@ -6,12 +6,10 @@ Handles up to 1000 concurrent chat sessions with efficient ChatGPT integration
 import asyncio
 import json
 import uuid
-import time
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Set
-from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional
 
-import redis.asyncio as redis
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,197 +19,15 @@ import uvicorn
 from services.shared.base_service import BaseService
 from services.shared.llm_client import LLMClient
 from services.shared.prompt_manager import PromptManager
+from connection_manager import ConnectionManager
+from redis_manager import RedisManager
+from rate_limiter import RateLimiter
 import os
 import debugpy
 
 if os.environ.get("DEBUGPY"):
     debugpy.listen(("0.0.0.0", 5678))
     print("🐛 Debugpy is listening on port 5678")
-
-
-# Global variables for connection management
-class ConnectionManager:
-    """Manages WebSocket connections for scalable chat sessions"""
-    
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-        self.session_connections: Dict[str, Set[str]] = {}
-        self.connection_metadata: Dict[str, Dict[str, Any]] = {}
-        
-    async def connect(self, websocket: WebSocket, session_id: str, client_id: str):
-        """Accept a new WebSocket connection"""
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-        
-        if session_id not in self.session_connections:
-            self.session_connections[session_id] = set()
-        self.session_connections[session_id].add(client_id)
-        
-        self.connection_metadata[client_id] = {
-            "session_id": session_id,
-            "connected_at": datetime.now(),
-            "last_activity": datetime.now()
-        }
-        
-    def disconnect(self, client_id: str):
-        """Remove a WebSocket connection"""
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
-            
-        # Remove from session tracking
-        for session_id, connections in list(self.session_connections.items()):
-            connections.discard(client_id)
-            if not connections:
-                del self.session_connections[session_id]
-                
-        if client_id in self.connection_metadata:
-            del self.connection_metadata[client_id]
-            
-    async def send_personal_message(self, message: str, client_id: str):
-        """Send message to specific client"""
-        if client_id in self.active_connections:
-            try:
-                await self.active_connections[client_id].send_text(message)
-            except:
-                self.disconnect(client_id)
-                
-    async def send_to_session(self, message: str, session_id: str):
-        """Send message to all clients in a session"""
-        if session_id in self.session_connections:
-            for client_id in list(self.session_connections[session_id]):
-                await self.send_personal_message(message, client_id)
-                
-    async def broadcast(self, message: str):
-        """Broadcast message to all active connections"""
-        for client_id in list(self.active_connections.keys()):
-            await self.send_personal_message(message, client_id)
-    
-    async def cleanup_stale_connections(self, timeout_minutes: int = 10):
-        """Clean up connections that haven't been active for specified timeout"""
-        current_time = datetime.now()
-        stale_connections = []
-        
-        for client_id, metadata in self.connection_metadata.items():
-            last_activity = metadata.get("last_activity")
-            if last_activity and (current_time - last_activity).total_seconds() > timeout_minutes * 60:
-                stale_connections.append(client_id)
-        
-        for client_id in stale_connections:
-            print(f"Cleaning up stale connection: {client_id}")
-            self.disconnect(client_id)
-
-
-class RedisManager:
-    """Redis-based session and context management"""
-    
-    def __init__(self, redis_url: str = "redis://redis:6379"):
-        self.redis_url = redis_url
-        self.redis_client = None
-        
-    async def connect(self):
-        """Initialize Redis connection"""
-        self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
-        
-    async def disconnect(self):
-        """Close Redis connection"""
-        if self.redis_client:
-            await self.redis_client.close()
-            
-    async def get_session_context(self, session_id: str) -> Dict[str, Any]:
-        """Get session context from Redis"""
-        if not self.redis_client:
-            return {}
-            
-        try:
-            context_data = await self.redis_client.hgetall(f"session:{session_id}")
-            if context_data:
-                # Parse JSON fields
-                for key in ['flight_data', 'policy_data', 'sentiment_history']:
-                    if key in context_data:
-                        try:
-                            context_data[key] = json.loads(context_data[key])
-                        except:
-                            context_data[key] = {}
-                
-                # Convert numeric fields back to their proper types
-                if 'message_count' in context_data:
-                    try:
-                        context_data['message_count'] = int(context_data['message_count'])
-                    except (ValueError, TypeError):
-                        context_data['message_count'] = 0
-                        
-            return context_data
-        except Exception as e:
-            print(f"Redis get error: {e}")
-            return {}
-            
-    async def set_session_context(self, session_id: str, context: Dict[str, Any], ttl: int = 3600):
-        """Store session context in Redis with TTL"""
-        if not self.redis_client:
-            return
-            
-        try:
-            # Serialize complex fields
-            serialized_context = {}
-            for key, value in context.items():
-                if isinstance(value, (dict, list)):
-                    serialized_context[key] = json.dumps(value)
-                else:
-                    serialized_context[key] = str(value)
-                    
-            await self.redis_client.hset(f"session:{session_id}", mapping=serialized_context)
-            await self.redis_client.expire(f"session:{session_id}", ttl)
-        except Exception as e:
-            print(f"Redis set error: {e}")
-            
-    async def cache_response(self, query_hash: str, response: str, ttl: int = 1800):
-        """Cache ChatGPT response to avoid duplicate API calls"""
-        if not self.redis_client:
-            return
-            
-        try:
-            await self.redis_client.setex(f"response:{query_hash}", ttl, response)
-        except Exception as e:
-            print(f"Redis cache error: {e}")
-            
-    async def get_cached_response(self, query_hash: str) -> Optional[str]:
-        """Get cached ChatGPT response"""
-        if not self.redis_client:
-            return None
-            
-        try:
-            return await self.redis_client.get(f"response:{query_hash}")
-        except Exception as e:
-            print(f"Redis get cache error: {e}")
-            return None
-
-
-class RateLimiter:
-    """Rate limiting for ChatGPT API calls"""
-    
-    def __init__(self, redis_manager: RedisManager):
-        self.redis_manager = redis_manager
-        self.local_limits: Dict[str, List[float]] = {}
-        
-    async def is_rate_limited(self, key: str, limit: int = 60, window: int = 60) -> bool:
-        """Check if rate limit is exceeded"""
-        current_time = time.time()
-        
-        # Clean old entries
-        if key in self.local_limits:
-            self.local_limits[key] = [
-                t for t in self.local_limits[key] 
-                if current_time - t < window
-            ]
-        else:
-            self.local_limits[key] = []
-            
-        # Check limit
-        if len(self.local_limits[key]) >= limit:
-            return True
-            
-        self.local_limits[key].append(current_time)
-        return False
 
 
 # Initialize services
@@ -234,9 +50,28 @@ redis_manager = RedisManager()
 rate_limiter = RateLimiter(redis_manager)
 llm_client = LLMClient("scalable-chatbot-svc", model="gpt-4o-mini")
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Manage service startup and shutdown without deprecated events."""
+    logger.info("startup_event begin")
+    await redis_manager.connect()
+    cleanup_task_handle = asyncio.create_task(cleanup_task())
+    logger.info("startup_event complete - scalable-chatbot-svc ready")
+
+    try:
+        yield
+    finally:
+        logger.info("shutdown_event begin")
+        cleanup_task_handle.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task_handle
+        await redis_manager.disconnect()
+        logger.info("shutdown_event complete")
+
+app.router.lifespan_context = lifespan
+
 # Environment variables for service URLs
 RETRIEVAL_SVC_URL = os.getenv("RETRIEVAL_SVC_URL", "http://knowledge-engine:8081")
-AGENT_SVC_URL = os.getenv("AGENT_SVC_URL", "http://agent-svc:8081")
 DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
 # Pydantic models
@@ -260,34 +95,17 @@ class StreamingResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    logger.info("startup_event begin")
-    await redis_manager.connect()
-    
-    # Start background task for cleaning up stale connections
-    asyncio.create_task(cleanup_task())
-    
-    logger.info("startup_event complete - scalable-chatbot-svc ready")
-
-
 async def cleanup_task():
     """Background task to clean up stale connections"""
     while True:
         try:
             await asyncio.sleep(300)  # Run every 5 minutes
             await manager.cleanup_stale_connections(timeout_minutes=10)
+        except asyncio.CancelledError:
+            logger.info("cleanup_task cancelled")
+            break
         except Exception as e:
             logger.error("cleanup_task error: %s", e, exc_info=True)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    logger.info("shutdown_event begin")
-    await redis_manager.disconnect()
-    logger.info("shutdown_event complete")
 
 
 @app.websocket("/ws/{session_id}/{client_id}")
