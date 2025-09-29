@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
+const STATS_POLL_INTERVAL_MS = 30000;
+
 interface Message {
   id: string;
   type: 'user' | 'bot' | 'system';
@@ -461,8 +463,8 @@ const ChatbotPage: React.FC = () => {
     getConnectionStats();
     getHealthStatus();
 
-    // Update stats every 10 seconds
-    const interval = setInterval(getConnectionStats, 10000);
+    // Update stats at a slower cadence to reduce backend load
+    const interval = setInterval(getConnectionStats, STATS_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

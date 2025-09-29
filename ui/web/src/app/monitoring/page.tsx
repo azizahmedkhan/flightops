@@ -19,6 +19,8 @@ import {
   Cpu
 } from 'lucide-react'
 
+const HEALTH_CHECK_INTERVAL_MS = 60000;
+
 type IconType = typeof Activity
 
 interface ServiceDefinition {
@@ -228,8 +230,8 @@ export default function MonitoringPage() {
 
   useEffect(() => {
     checkAllServices()
-    // Set up automatic health checks every 30 seconds
-    const interval = setInterval(checkAllServices, 30000)
+    // Set up automatic health checks with a longer cadence
+    const interval = setInterval(checkAllServices, HEALTH_CHECK_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [])
 

@@ -107,10 +107,37 @@ async def cleanup_task():
         except Exception as e:
             logger.error("cleanup_task error: %s", e, exc_info=True)
 
+# REST API endpoints
+@app.post("/chat/session")
+async def create_session(request: SessionCreate, req: Request):
+    service.logger.debug("1 Create a new chat session")
+    try:
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        session_context = {
+            "session_id": session_id,
+            "customer_name": request.customer_name,
+            "customer_email": request.customer_email,
+            "flight_no": request.flight_no,
+            "date": request.date,
+            "created_at": datetime.now().isoformat(),
+            "last_activity": datetime.now().isoformat(),
+            "message_count": 0
+        }
+        
+        await redis_manager.set_session_context(session_id, session_context)
+        
+        service.log_request(req, {"status": "success", "session_id": session_id})
+        return {"session_id": session_id, "status": "created", "context": session_context}
+        
+    except Exception as e:
+        service.log_error(e, "create_session")
+        raise HTTPException(status_code=500, detail="Failed to create session")
+
 
 @app.websocket("/ws/{session_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: str):
-    service.logger.info("WebSocket endpoint for real-time chat")
+    service.logger.info("2. once for every new connection/ also on reconnect. WebSocket endpoint for real-time chat")
     logger.info("websocket_endpoint begin session_id=%s client_id=%s", session_id, client_id)
     await manager.connect(websocket, session_id, client_id)
     
@@ -149,7 +176,7 @@ async def process_chat_message(session_id: str, message_data: Dict[str, Any], cl
     """Process chat message asynchronously"""
     try:
         logger.info(
-            "process_chat_message begin session_id=%s client_id=%s",
+            "2.1 for every subsequenet message separate for each session. process_chat_message begin session_id=%s client_id=%s",
             session_id,
             client_id
         )
@@ -425,35 +452,6 @@ def build_context_string(session_context: Dict[str, Any]) -> str:
             context_parts.append(f"Relevant Policies: {len(policy_data)} policies available")
     
     return "\n".join(context_parts) if context_parts else "No specific context available"
-
-
-# REST API endpoints
-@app.post("/chat/session")
-async def create_session(request: SessionCreate, req: Request):
-    service.logger.info("Create a new chat session")
-    try:
-        session_id = request.session_id or str(uuid.uuid4())
-        
-        session_context = {
-            "session_id": session_id,
-            "customer_name": request.customer_name,
-            "customer_email": request.customer_email,
-            "flight_no": request.flight_no,
-            "date": request.date,
-            "created_at": datetime.now().isoformat(),
-            "last_activity": datetime.now().isoformat(),
-            "message_count": 0
-        }
-        
-        await redis_manager.set_session_context(session_id, session_context)
-        
-        service.log_request(req, {"status": "success", "session_id": session_id})
-        return {"session_id": session_id, "status": "created", "context": session_context}
-        
-    except Exception as e:
-        service.log_error(e, "create_session")
-        raise HTTPException(status_code=500, detail="Failed to create session")
-
 
 @app.get("/chat/session/{session_id}")
 async def get_session(session_id: str, req: Request):
