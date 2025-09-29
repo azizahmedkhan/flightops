@@ -33,13 +33,11 @@ def create_chat_router(
     redis_manager,
     process_chat_message: Callable[[str, Dict[str, Any], str], Awaitable[None]],
 ) -> APIRouter:
-    """Build a router containing the chat REST fallback endpoints."""
-
     router = APIRouter(prefix="/chat", tags=["chat"])
 
     @router.post("/session")
     async def create_session(request: SessionCreate, req: Request):
-        service.logger.debug("Create session via REST fallback")
+        service.logger.info("1. Create session via REST")
 
         try:
             session_id = request.session_id or str(uuid.uuid4())
@@ -70,7 +68,7 @@ def create_chat_router(
 
     @router.get("/session/{session_id}")
     async def get_session(session_id: str, req: Request):
-        service.logger.debug("Get session info via REST fallback session_id=%s", session_id)
+        service.logger.info("Get session info via REST fallback session_id=%s", session_id)
 
         try:
             context = await redis_manager.get_session_context(session_id)

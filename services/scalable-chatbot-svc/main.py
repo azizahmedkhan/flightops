@@ -85,8 +85,6 @@ async def cleanup_task():
         except Exception as e:
             logger.error("cleanup_task error: %s", e, exc_info=True)
 
-# REST API endpoints handled in chat_rest.py (fallback for non-WebSocket clients)
-
 
 @app.websocket("/ws/{session_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: str):

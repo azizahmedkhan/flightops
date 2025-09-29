@@ -5,6 +5,7 @@ Comprehensive test suite for the scalable chatbot service
 import asyncio
 import json
 import pytest
+import pytest_asyncio
 import httpx
 import websockets
 from datetime import datetime
@@ -14,8 +15,11 @@ import os
 
 # Add the parent directory to the path so we can import the main module
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 from main import app, manager, redis_manager, rate_limiter, llm_client
+from connection_manager import ConnectionManager
 from chatbot_toolkit import (
     fetch_flight_context, 
     fetch_policy_context, 
@@ -28,37 +32,39 @@ from chatbot_toolkit import (
     format_kb_response
 )
 
+@pytest_asyncio.fixture
+async def client():
+    """Create test client"""
+    async with httpx.AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture
+async def mock_redis():
+    """Mock Redis manager"""
+    mock_redis = AsyncMock()
+    mock_redis.get_session_context.return_value = {}
+    mock_redis.set_session_context.return_value = None
+    mock_redis.cache_response.return_value = None
+    mock_redis.get_cached_response.return_value = None
+    return mock_redis
+
+
+@pytest_asyncio.fixture
+async def mock_llm_client():
+    """Mock LLM client"""
+    mock_llm = Mock()
+    mock_llm.chat_completion.return_value = {
+        "content": "Test response from ChatGPT",
+        "tokens_used": 50,
+        "duration_ms": 1000
+    }
+    return mock_llm
+
 
 class TestChatbotService:
     """Test suite for the chatbot service"""
     
-    @pytest.fixture
-    async def client(self):
-        """Create test client"""
-        async with httpx.AsyncClient(app=app, base_url="http://test") as ac:
-            yield ac
-    
-    @pytest.fixture
-    async def mock_redis(self):
-        """Mock Redis manager"""
-        mock_redis = AsyncMock()
-        mock_redis.get_session_context.return_value = {}
-        mock_redis.set_session_context.return_value = None
-        mock_redis.cache_response.return_value = None
-        mock_redis.get_cached_response.return_value = None
-        return mock_redis
-    
-    @pytest.fixture
-    async def mock_llm_client(self):
-        """Mock LLM client"""
-        mock_llm = Mock()
-        mock_llm.chat_completion.return_value = {
-            "content": "Test response from ChatGPT",
-            "tokens_used": 50,
-            "duration_ms": 1000
-        }
-        return mock_llm
-
 
 class TestWebSocketConnections(TestChatbotService):
     """Test WebSocket functionality"""
@@ -83,7 +89,8 @@ class TestWebSocketConnections(TestChatbotService):
         # Test disconnection
         manager.disconnect(client_id)
         assert client_id not in manager.active_connections
-        assert client_id not in manager.session_connections[session_id]
+        # disconnect removes the session key when no clients remain
+        assert session_id not in manager.session_connections
     
     @pytest.mark.asyncio
     async def test_multiple_connections_per_session(self):
@@ -353,10 +360,10 @@ class TestKnowledgeBaseIntegration(TestChatbotService):
         assert route_query("What are the refund policies?") == "kb"
         assert route_query("How do I get travel credits?") == "kb"
         
-        # Test flight status queries
-        assert route_query("Is my flight on time?") == "flight"
-        assert route_query("What gate is my flight departing from?") == "flight"
-        assert route_query("Has flight NZ123 departed?") == "flight"
+        # Test flight/database queries now route through database intent
+        assert route_query("Is my flight on time?") == "database"
+        assert route_query("What gate is my flight departing from?") == "database"
+        assert route_query("Has flight NZ123 departed?") == "database"
         
         # Test mixed queries (should prefer KB)
         assert route_query("What is the policy for delayed flights?") == "kb"
@@ -379,30 +386,28 @@ class TestKnowledgeBaseIntegration(TestChatbotService):
             }
         ]
         
-        sources = []
+        sources: list[str] = []
         response = format_kb_response(chunks, sources)
         
         # Check that response contains the snippets
         assert "Passengers are allowed one carry-on bag" in response
         assert "Excess baggage fees apply" in response
         
-        # Check that sources are properly formatted
-        assert len(sources) == 2
-        assert "[1] 01_baggage_allowance.md (customer)" in sources
-        assert "[2] 03_excess_fees.md (customer)" in sources
-        
-        # Check that sources are included in response
+        # format_kb_response no longer mutates the sources argument; rely on response content
+        assert sources == []
+
+        # Check that sources are included in response with citations
         assert "Sources:" in response
         assert "[1] 01_baggage_allowance.md (customer)" in response
-    
+        
     def test_format_kb_response_empty(self):
         """Test KB response formatting with empty chunks"""
-        sources = []
+        sources: list[str] = []
         response = format_kb_response([], sources)
         
-        assert "I don't have specific information" in response
+        assert "I can't confirm from current info" in response
         assert "contact our support team" in response
-        assert len(sources) == 0
+        assert sources == []
     
     @pytest.mark.asyncio
     async def test_kb_integration_flow(self, client):
@@ -546,6 +551,31 @@ class TestIntegration(TestChatbotService):
 class TestPerformance(TestChatbotService):
     """Performance and load testing"""
     
+    @pytest.mark.asyncio
+    async def test_connection_manager_handles_thousand_clients(self):
+        """Ensure connection manager supports 1000 active WebSocket clients."""
+        session_id = "scalability-session"
+        connection_manager = ConnectionManager()
+
+        clients = [f"client-{i}" for i in range(1000)]
+
+        # Connect 1000 mocked websocket clients
+        for client_id in clients:
+            mock_websocket = AsyncMock()
+            mock_websocket.accept = AsyncMock()
+            await connection_manager.connect(mock_websocket, session_id, client_id)
+
+        assert len(connection_manager.active_connections) == 1000
+        assert session_id in connection_manager.session_connections
+        assert len(connection_manager.session_connections[session_id]) == 1000
+
+        # Disconnect everyone and ensure cleanup
+        for client_id in clients:
+            connection_manager.disconnect(client_id)
+
+        assert connection_manager.active_connections == {}
+        assert session_id not in connection_manager.session_connections
+
     @pytest.mark.asyncio
     async def test_concurrent_sessions(self, client):
         """Test creating multiple sessions concurrently"""

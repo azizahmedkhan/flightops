@@ -5,7 +5,6 @@ Pytest configuration and fixtures for chatbot tests
 import pytest
 import asyncio
 import httpx
-import redis.asyncio as redis
 from unittest.mock import AsyncMock, Mock
 import os
 import sys
