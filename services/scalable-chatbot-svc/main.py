@@ -5,15 +5,13 @@ Handles up to 1000 concurrent chat sessions with efficient ChatGPT integration
 
 import asyncio
 import json
-import uuid
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 import uvicorn
 
 from services.shared.base_service import BaseService
@@ -22,6 +20,7 @@ from services.shared.prompt_manager import PromptManager
 from connection_manager import ConnectionManager
 from redis_manager import RedisManager
 from rate_limiter import RateLimiter
+from chat_rest import create_chat_router
 import os
 import debugpy
 
@@ -74,27 +73,6 @@ app.router.lifespan_context = lifespan
 KNOWLEDGE_SERVICE_URL = os.getenv("KNOWLEDGE_SERVICE_URL", "http://knowledge-engine:8081")
 DB_ROUTER_URL = os.getenv("DB_ROUTER_URL", "http://db-router-svc:8000")
 
-# Pydantic models
-class ChatMessage(BaseModel):
-    session_id: str
-    message: str
-    client_id: Optional[str] = None
-
-class SessionCreate(BaseModel):
-    session_id: Optional[str] = None
-    customer_name: str
-    customer_email: str
-    flight_no: Optional[str] = None
-    date: Optional[str] = None
-
-class StreamingResponse(BaseModel):
-    type: str  # "chunk", "complete", "error"
-    content: str
-    session_id: str
-    timestamp: str
-    metadata: Optional[Dict[str, Any]] = None
-
-
 async def cleanup_task():
     """Background task to clean up stale connections"""
     while True:
@@ -107,32 +85,7 @@ async def cleanup_task():
         except Exception as e:
             logger.error("cleanup_task error: %s", e, exc_info=True)
 
-# REST API endpoints
-@app.post("/chat/session")
-async def create_session(request: SessionCreate, req: Request):
-    service.logger.debug("1 Create a new chat session")
-    try:
-        session_id = request.session_id or str(uuid.uuid4())
-        
-        session_context = {
-            "session_id": session_id,
-            "customer_name": request.customer_name,
-            "customer_email": request.customer_email,
-            "flight_no": request.flight_no,
-            "date": request.date,
-            "created_at": datetime.now().isoformat(),
-            "last_activity": datetime.now().isoformat(),
-            "message_count": 0
-        }
-        
-        await redis_manager.set_session_context(session_id, session_context)
-        
-        service.log_request(req, {"status": "success", "session_id": session_id})
-        return {"session_id": session_id, "status": "created", "context": session_context}
-        
-    except Exception as e:
-        service.log_error(e, "create_session")
-        raise HTTPException(status_code=500, detail="Failed to create session")
+# REST API endpoints handled in chat_rest.py (fallback for non-WebSocket clients)
 
 
 @app.websocket("/ws/{session_id}/{client_id}")
@@ -429,6 +382,10 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         await manager.send_personal_message(json.dumps(error_response), client_id)
 
 
+chat_router = create_chat_router(service, redis_manager, process_chat_message)
+app.include_router(chat_router)
+
+
 def build_context_string(session_context: Dict[str, Any]) -> str:
     """Build context string from session data"""
     context_parts = []
@@ -452,45 +409,6 @@ def build_context_string(session_context: Dict[str, Any]) -> str:
             context_parts.append(f"Relevant Policies: {len(policy_data)} policies available")
     
     return "\n".join(context_parts) if context_parts else "No specific context available"
-
-@app.get("/chat/session/{session_id}")
-async def get_session(session_id: str, req: Request):
-    service.logger.info("Get session information")
-    try:
-        context = await redis_manager.get_session_context(session_id)
-        if not context:
-            raise HTTPException(status_code=404, detail="Session not found")
-            
-        service.log_request(req, {"status": "success", "session_id": session_id})
-        return {"session_id": session_id, "context": context}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        service.log_error(e, "get_session")
-        raise HTTPException(status_code=500, detail="Failed to get session")
-
-
-@app.post("/chat/message")
-async def send_message(message: ChatMessage, req: Request):
-    service.logger.info("Send a message via REST API (fallback for WebSocket)")
-    try:
-        session_context = await redis_manager.get_session_context(message.session_id)
-        if not session_context:
-            raise HTTPException(status_code=404, detail="Session not found")
-        
-        # Process message synchronously for REST API
-        await process_chat_message(message.session_id, {"message": message.message}, message.client_id or "rest")
-        
-        service.log_request(req, {"status": "success", "session_id": message.session_id})
-        return {"status": "message_sent", "session_id": message.session_id}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        service.log_error(e, "send_message")
-        raise HTTPException(status_code=500, detail="Failed to send message")
-
 
 @app.get("/health")
 async def health_check(req: Request):
