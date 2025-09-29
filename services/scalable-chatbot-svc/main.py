@@ -110,7 +110,7 @@ async def cleanup_task():
 
 @app.websocket("/ws/{session_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str, client_id: str):
-    """WebSocket endpoint for real-time chat"""
+    service.logger.info("WebSocket endpoint for real-time chat")
     logger.info("websocket_endpoint begin session_id=%s client_id=%s", session_id, client_id)
     await manager.connect(websocket, session_id, client_id)
     
@@ -430,7 +430,7 @@ def build_context_string(session_context: Dict[str, Any]) -> str:
 # REST API endpoints
 @app.post("/chat/session")
 async def create_session(request: SessionCreate, req: Request):
-    """Create a new chat session"""
+    service.logger.info("Create a new chat session")
     try:
         session_id = request.session_id or str(uuid.uuid4())
         
@@ -457,7 +457,7 @@ async def create_session(request: SessionCreate, req: Request):
 
 @app.get("/chat/session/{session_id}")
 async def get_session(session_id: str, req: Request):
-    """Get session information"""
+    service.logger.info("Get session information")
     try:
         context = await redis_manager.get_session_context(session_id)
         if not context:
@@ -475,7 +475,7 @@ async def get_session(session_id: str, req: Request):
 
 @app.post("/chat/message")
 async def send_message(message: ChatMessage, req: Request):
-    """Send a message via REST API (fallback for WebSocket)"""
+    service.logger.info("Send a message via REST API (fallback for WebSocket)")
     try:
         session_context = await redis_manager.get_session_context(message.session_id)
         if not session_context:
@@ -515,7 +515,7 @@ async def health_check(req: Request):
             "uptime": "running"
         }
         
-        service.log_request(req, health_data)
+        # service.log_request(req, health_data)
         return health_data
         
     except Exception as e:
@@ -534,7 +534,7 @@ async def get_stats(req: Request):
             "timestamp": datetime.now().isoformat()
         }
         
-        service.log_request(req, {"status": "success"})
+        # service.log_request(req, {"status": "success"})
         return metrics
         
     except Exception as e:
