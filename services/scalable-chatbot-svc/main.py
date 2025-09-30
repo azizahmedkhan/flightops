@@ -281,7 +281,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         await manager.send_personal_message(json.dumps(thinking_response), client_id)
         
         # Get response from ChatGPT
-        response = llm_client.chat_completion(
+        response = await llm_client.chat_completion_async(
             messages=messages,
             temperature=0.3,
             max_tokens=500,

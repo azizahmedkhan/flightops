@@ -307,7 +307,7 @@ class TestAnswerFormatting:
             def __init__(self):
                 self.calls = 0
 
-            def chat_completion(self, **kwargs):
+            async def chat_completion_async(self, **kwargs):
                 self.calls += 1
                 return {"content": "Flight NZ278 is on time"}
 
@@ -332,7 +332,7 @@ class TestAnswerFormatting:
             def __init__(self):
                 self.calls = 0
 
-            def chat_completion(self, **kwargs):
+            async def chat_completion_async(self, **kwargs):
                 self.calls += 1
                 return {"content": "Should not be called"}
 
@@ -357,7 +357,7 @@ class TestAnswerFormatting:
             def __init__(self):
                 self.calls = 0
 
-            def chat_completion(self, **kwargs):
+            async def chat_completion_async(self, **kwargs):
                 self.calls += 1
                 raise Exception("LLM error")
 

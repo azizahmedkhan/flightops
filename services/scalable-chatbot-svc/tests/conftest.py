@@ -37,11 +37,11 @@ async def mock_redis():
 async def mock_llm_client():
     """Mock LLM client for testing"""
     mock_llm = Mock()
-    mock_llm.chat_completion.return_value = {
+    mock_llm.chat_completion_async = AsyncMock(return_value={
         "content": '{"response_to_customer": "Hello! How can I help you today?", "analysis": {"sentiment": "neutral", "sentiment_score": 0.0, "urgency_level": "low"}}',
         "tokens_used": 50,
         "duration_ms": 1000
-    }
+    })
     return mock_llm
 
 

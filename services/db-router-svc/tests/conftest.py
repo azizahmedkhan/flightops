@@ -234,7 +234,7 @@ def mock_llm_client():
             "arguments": '{"intent": "flight_status", "args": {"flight_no": "NZ278", "date": null}, "confidence": 0.95}'
         }
     })
-    mock_client.chat_completion = MagicMock(return_value={"content": "Flight NZ278 is on time"})
+    mock_client.chat_completion_async = AsyncMock(return_value={"content": "Flight NZ278 is on time"})
     return mock_client
 
 

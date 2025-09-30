@@ -6,7 +6,6 @@ with safe, parameterized SQL execution.
 """
 
 import os
-import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Tuple
@@ -262,8 +261,7 @@ async def format_query_answer(
     ]
 
     try:
-        response = await asyncio.to_thread(
-            llm_client.chat_completion,
+        response = await llm_client.chat_completion_async(
             messages=messages,
             temperature=0.2,
             max_tokens=500,

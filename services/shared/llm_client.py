@@ -3,14 +3,15 @@ Centralized LLM client for FlightOps services.
 Provides a single interface for all OpenAI chat completions with built-in logging and tracking.
 """
 
+import asyncio
 import json
 import os
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Awaitable
 
 import requests
 from loguru import logger
-from openai import OpenAI
+from openai import AsyncOpenAI
 try:
     from .llm_tracker import LLMTracker
 except ImportError:  # pragma: no cover - fallback for path-based imports
@@ -37,7 +38,7 @@ class LLMClient:
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
         
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = AsyncOpenAI(api_key=self.api_key)
 
     def _extract_prompt(self, messages: List[Dict[str, str]]) -> str:
         """Return the first user message content for tracking."""
@@ -62,7 +63,22 @@ class LLMClient:
             merged.update(base)
         return merged
 
-    def _track_and_send(
+    @staticmethod
+    def _run_sync(coro: Awaitable[Any]) -> Any:
+        """Execute an async coroutine in a synchronous context."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            raise RuntimeError(
+                "Cannot call this method from an async context; use the *_async variant instead."
+            )
+
+        return asyncio.run(coro)
+
+    async def _track_and_send(
         self,
         *,
         prompt: str,
@@ -81,32 +97,31 @@ class LLMClient:
             duration_ms=duration_ms,
             metadata=metadata
         )
-        self._send_message_to_gateway(llm_message)
+        await self._send_message_to_gateway(llm_message)
         return llm_message
     
-    def _send_message_to_gateway(self, message: Dict[str, Any]) -> None:
-        """
-        Send a tracked LLM message to the gateway API for centralized storage.
-        
-        Args:
-            message: The tracked LLM message to send
-        """
-        try:
-            response = requests.post(
-                f"{self.gateway_url}/llm/track",
-                json=message,
-                timeout=5
-            )
-            if response.status_code != 200:
-                logger.warning(
-                    "LLM tracking post returned status {status}",
-                    status=response.status_code
+    async def _send_message_to_gateway(self, message: Dict[str, Any]) -> None:
+        """Send a tracked LLM message to the gateway API without blocking the event loop."""
+
+        def _post_message() -> None:
+            try:
+                response = requests.post(
+                    f"{self.gateway_url}/llm/track",
+                    json=message,
+                    timeout=5
                 )
-        except Exception as exc:  # pragma: no cover - defensive path
-            # Don't fail the main operation if tracking fails
-            logger.warning("Failed to send LLM message to gateway: {error}", error=exc)
+                if response.status_code != 200:
+                    logger.warning(
+                        "LLM tracking post returned status {status}",
+                        status=response.status_code
+                    )
+            except Exception as exc:  # pragma: no cover - defensive path
+                # Don't fail the main operation if tracking fails
+                logger.warning("Failed to send LLM message to gateway: {error}", error=exc)
+
+        await asyncio.to_thread(_post_message)
     
-    def chat_completion(
+    async def chat_completion_async(
         self,
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
@@ -134,8 +149,8 @@ class LLMClient:
         logger.debug("LLM request payload", messages=messages, model=model)
 
         try:
-            # Make the API call
-            response = self.client.chat.completions.create(
+            # Make the API call without blocking the event loop
+            response = await self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -159,7 +174,7 @@ class LLMClient:
 
             tokens_used = self._extract_tokens(response)
 
-            llm_message = self._track_and_send(
+            llm_message = await self._track_and_send(
                 prompt=prompt,
                 response_text=content or "",
                 model=model,
@@ -195,7 +210,7 @@ class LLMClient:
                 error_message=str(e)
             )
 
-            self._track_and_send(
+            await self._track_and_send(
                 prompt=prompt,
                 response_text=f"Error: {e}",
                 model=model,
@@ -212,7 +227,31 @@ class LLMClient:
             # Re-raise the exception
             raise e
     
-    def simple_completion(
+    def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+        function_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Synchronous wrapper for compatibility."""
+
+        return self._run_sync(
+            self.chat_completion_async(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                function_name=function_name,
+                metadata=metadata,
+                **kwargs
+            )
+        )
+    
+    async def simple_completion_async(
         self,
         prompt: str,
         model: Optional[str] = None,
@@ -223,10 +262,10 @@ class LLMClient:
         include_tracking: bool = False,
         **kwargs
     ) -> Union[str, Dict[str, Any]]:
-        
+
         messages = [{"role": "user", "content": prompt}]
 
-        result = self.chat_completion(
+        result = await self.chat_completion_async(
             messages=messages,
             model=model,
             temperature=temperature,
@@ -245,7 +284,32 @@ class LLMClient:
             }
         return result["content"]
     
-    def json_completion(
+    def simple_completion(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+        function_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        include_tracking: bool = False,
+        **kwargs
+    ) -> Union[str, Dict[str, Any]]:
+
+        return self._run_sync(
+            self.simple_completion_async(
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                function_name=function_name,
+                metadata=metadata,
+                include_tracking=include_tracking,
+                **kwargs
+            )
+        )
+    
+    async def json_completion_async(
         self,
         prompt: str,
         model: Optional[str] = None,
@@ -256,8 +320,8 @@ class LLMClient:
         fallback_value: Any = None,
         **kwargs
     ) -> Any:
-        
-        result = self.simple_completion(
+
+        result = await self.simple_completion_async(
             prompt=prompt,
             model=model,
             temperature=temperature,
@@ -280,6 +344,31 @@ class LLMClient:
             if fallback_value is not None:
                 return fallback_value
             raise ValueError(f"Failed to parse JSON response: {content}")
+    
+    def json_completion(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: Optional[int] = None,
+        function_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        fallback_value: Any = None,
+        **kwargs
+    ) -> Any:
+
+        return self._run_sync(
+            self.json_completion_async(
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                function_name=function_name,
+                metadata=metadata,
+                fallback_value=fallback_value,
+                **kwargs
+            )
+        )
     
     async def call_function(
         self,
@@ -320,7 +409,7 @@ class LLMClient:
                 prompt_preview
             )
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -349,7 +438,7 @@ class LLMClient:
                 } if function_call else None
             )
 
-            llm_message = self._track_and_send(
+            llm_message = await self._track_and_send(
                 prompt=prompt,
                 response_text=content,
                 model=model,

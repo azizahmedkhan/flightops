@@ -54,11 +54,11 @@ async def mock_redis():
 async def mock_llm_client():
     """Mock LLM client"""
     mock_llm = Mock()
-    mock_llm.chat_completion.return_value = {
+    mock_llm.chat_completion_async = AsyncMock(return_value={
         "content": "Test response from ChatGPT",
         "tokens_used": 50,
         "duration_ms": 1000
-    }
+    })
     return mock_llm
 
 
@@ -544,7 +544,7 @@ class TestIntegration(TestChatbotService):
             assert mock_redis.set_session_context.called
             
             # 4. Verify LLM was called
-            assert mock_llm_client.chat_completion.called
+            assert mock_llm_client.chat_completion_async.called
 
 
 # Performance Tests
