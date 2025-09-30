@@ -32,11 +32,13 @@ CREW_URL = service.get_env_var("CREW_URL", "http://crew-svc:8086")
 DB_ROUTER_URL = service.get_env_var("DB_ROUTER_URL", "http://db-router-svc:8000")
 
 # Database configuration
-DB_HOST = service.get_env_var("DB_HOST", "db")
-DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME", "flightops")
-DB_USER = service.get_env_var("DB_USER", "postgres")
-DB_PASS = service.get_env_var("DB_PASS", "postgres")
+DB_HOST = service.get_env_var("DB_HOST")
+DB_PORT = service.get_env_int("DB_PORT")
+DB_NAME = service.get_env_var("DB_NAME")
+DB_USER = service.get_env_var("DB_USER")
+DB_PASS = service.get_env_var("DB_PASS")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
+
 
 # Embedding configuration
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
@@ -67,7 +69,7 @@ def embed(text: str) -> List[float]:
     """Generate embeddings using OpenAI API."""
     try:
         from openai import OpenAI
-        client = OpenAI()  # Uses OPENAI_API_KEY from environment
+        client = OpenAI(api_key=OPENAI_API_KEY)  # Uses OPENAI_API_KEY from environment
         resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
         return resp.data[0].embedding
     except Exception as e:

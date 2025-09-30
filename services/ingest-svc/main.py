@@ -20,12 +20,13 @@ service = BaseService("ingest-svc", "1.0.0")
 app = service.get_app()
 
 # Get environment variables using the base service
-DB_HOST = service.get_env_var("DB_HOST", "localhost")
-DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME", "flightops")
-DB_USER = service.get_env_var("DB_USER", "postgres")
-DB_PASS = service.get_env_var("DB_PASS", "postgres")
-EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL", "text-embedding-3-small")
+DB_HOST = service.get_env_var("DB_HOST")
+DB_PORT = service.get_env_int("DB_PORT")
+DB_NAME = service.get_env_var("DB_NAME")
+DB_USER = service.get_env_var("DB_USER")
+DB_PASS = service.get_env_var("DB_PASS")
+EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
 
 # Create database connection pool
 DB_CONN_STRING = f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASS}"
@@ -37,7 +38,7 @@ def embed(text: str) -> List[float]:
     """Generate embeddings using OpenAI API."""
     try:
         from openai import OpenAI
-        client = OpenAI()  # Uses OPENAI_API_KEY from environment
+        client = OpenAI(api_key=OPENAI_API_KEY)  # Uses OPENAI_API_KEY from environment
         resp = client.embeddings.create(input=[text], model=EMBEDDINGS_MODEL)
         return resp.data[0].embedding
     except Exception as e:

@@ -17,11 +17,11 @@ service = BaseService("crew-svc", "1.0.0")
 app = service.get_app()
 
 # Get environment variables
-DB_HOST = service.get_env_var("DB_HOST", "localhost")
-DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME", "flightops")
-DB_USER = service.get_env_var("DB_USER", "postgres")
-DB_PASS = service.get_env_var("DB_PASS", "postgres")
+DB_HOST = service.get_env_var("DB_HOST")
+DB_PORT = service.get_env_int("DB_PORT")
+DB_NAME = service.get_env_var("DB_NAME")
+DB_USER = service.get_env_var("DB_USER")
+DB_PASS = service.get_env_var("DB_PASS")
 
 # Initialize LLM client
 llm_client = create_llm_client("crew-svc")

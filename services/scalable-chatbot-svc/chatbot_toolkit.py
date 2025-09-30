@@ -253,7 +253,7 @@ async def fetch_kb_context(query: str, knowledge_service_url: str) -> Optional[L
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 f"{knowledge_service_url}/kb/search",
-                json={"q": query, "k": 3}
+                json={"query": query, "k": 3}
             )
             if response.status_code == 200:
                 data = response.json()

@@ -47,7 +47,7 @@ pytestmark = pytest.mark.skipif(
 MESSAGES: List[str] = [
     "Hello there!",
     "Can you help me with my booking?",
-    "What are the baggage allowance policies for international flights?",
+    "When is the next flight to Wellington?",
     "I need information about flight NZ123 from Auckland to Sydney",
     "Thanks for the info!",
 ]

@@ -31,12 +31,12 @@ app.add_middleware(
 )
 
 # Environment / configuration
-DB_HOST = service.get_env_var("DB_HOST", "db")
-DB_PORT = service.get_env_int("DB_PORT", 5432)
-DB_NAME = service.get_env_var("DB_NAME", "flightops")
-DB_USER = service.get_env_var("DB_USER", "postgres")
-DB_PASS = service.get_env_var("DB_PASS", "postgres")
-OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY", "")
+DB_HOST = service.get_env_var("DB_HOST")
+DB_PORT = service.get_env_int("DB_PORT")
+DB_NAME = service.get_env_var("DB_NAME")
+DB_USER = service.get_env_var("DB_USER")
+DB_PASS = service.get_env_var("DB_PASS")
+OPENAI_API_KEY = service.get_env_var("OPENAI_API_KEY")
 EMBEDDINGS_MODEL = service.get_env_var("EMBEDDINGS_MODEL")
 
 DB_CONN_STRING = (

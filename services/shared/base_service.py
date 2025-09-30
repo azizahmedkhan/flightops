@@ -111,11 +111,21 @@ class BaseService:
             self.logger.warning(f"Environment variable {key} not set, using default: {default}")
         return value
     
-    def get_env_int(self, key: str, default: int) -> int:
-        """Get environment variable as integer"""
+    def get_env_int(self, key: str, default: Optional[int] = None) -> int:
+        """Get environment variable as integer, with optional default"""
+        raw_default = str(default) if default is not None else None
+        value = self.get_env_var(key, raw_default)
+
+        if value is None:
+            if default is None:
+                raise ValueError(f"Environment variable {key} is required and has no default")
+            return default
+
         try:
-            return int(self.get_env_var(key, str(default)))
-        except ValueError:
+            return int(value)
+        except (TypeError, ValueError):
+            if default is None:
+                raise ValueError(f"Invalid integer value for {key}: {value}")
             self.logger.warning(f"Invalid integer value for {key}, using default: {default}")
             return default
     
