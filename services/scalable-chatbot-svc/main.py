@@ -208,7 +208,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         
         # Route the query to determine if it needs KB or flight status
         query_type = route_query(user_message)
-        
+        logger.info(f"query_type: {query_type}")
         # Initialize response metadata
         response_metadata = {
             "query_type": query_type,
