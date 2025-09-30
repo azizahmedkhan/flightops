@@ -20,7 +20,7 @@ INTENT_SQL = {
         SELECT flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status, tail_number
         FROM flights
         WHERE flight_no = $1
-          AND (COALESCE($2, '') = '' OR flight_date = $2)
+          AND ($2::date IS NULL OR flight_date = $2::date)
         ORDER BY flight_date DESC, sched_dep_time DESC
         LIMIT 1
         """,
@@ -45,7 +45,7 @@ INTENT_SQL = {
         SELECT flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status
         FROM flights
         WHERE origin = $1
-          AND (COALESCE($2, '') = '' OR flight_date = $2)
+          AND ($2::date IS NULL OR flight_date = $2::date)
         ORDER BY sched_dep_time ASC
         LIMIT 20
         """,
@@ -57,7 +57,7 @@ INTENT_SQL = {
         SELECT flight_no, flight_date, origin, destination, sched_dep_time, sched_arr_time, status
         FROM flights
         WHERE destination = $1
-          AND (COALESCE($2, '') = '' OR flight_date = $2)
+          AND ($2::date IS NULL OR flight_date = $2::date)
         ORDER BY sched_dep_time ASC
         LIMIT 20
         """,
@@ -199,6 +199,11 @@ class DatabaseExecutor:
         params = []
         for param_name in param_names:
             value = args.get(param_name)
+
+            if param_name == "date" and isinstance(value, str):
+                value = value.strip()
+                if value == "":
+                    value = None
 
             if param_name == "after_time":
                 value = self._normalize_after_time(value)
