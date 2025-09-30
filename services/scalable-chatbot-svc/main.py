@@ -240,17 +240,6 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             else:
                 # Use safe fallback for database queries
                 db_response = get_safe_fallback_response("database")
-        elif query_type == "flight":
-            # For flight status queries, prefer live context; otherwise fall back to database lookup
-            if session_context.get("flight_data"):
-                pass  # existing flight context in session is already part of the prompt
-            else:
-                db_data = await fetch_database_context(user_message, DB_ROUTER_URL)
-                if db_data:
-                    response_metadata["database_context"] = db_data
-                    db_response = format_database_response(db_data, response_metadata["sources"])
-                else:
-                    kb_response = get_safe_fallback_response("flight")
         else:
             # Unknown query type - use general fallback
             kb_response = get_safe_fallback_response("general")

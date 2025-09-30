@@ -5,9 +5,9 @@
 
 ## 🎬 **INTRODUCTION** (30 seconds)
 
-"Hi everyone! I'm [Your Name], and today I want to walk you through how we built a scalable chatbot service that can handle 1000+ concurrent users. This is a production-ready system using modern async architecture, WebSocket connections, and intelligent caching. While it's designed specifically for airline operations, the patterns and techniques we use are applicable to any high-traffic chat application.
+"I want to walk you through how I built a scalable chatbot service that can handle 1000+ concurrent users. This is a production-ready system using modern async architecture, WebSocket connections, and intelligent caching. While it's designed specifically for airline operations, the patterns and techniques we use are applicable to any high-traffic chat application.
 
-Let me show you how we achieved this scale and the key architectural decisions that made it possible."
+Let me show you how I achieved this scale and the key architectural decisions that made it possible."
 
 ---
 

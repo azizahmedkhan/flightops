@@ -5,7 +5,7 @@
 ---
 
 ## 0. Hook (0:00 – 0:30)
-"Hey, I’m Alex from FlightOps. Our team built a scalable chat service that keeps over a thousand passengers chatting simultaneously without breaking a sweat. In the next few minutes I’ll walk you through how it stays fast, safe, and context-aware."
+I have built a scalable chat service that keeps hundreds of users chatting simultaneously without breaking a sweat. In the next few minutes I’ll walk you through how it stays fast, safe, and context-aware."
 
 ---
 

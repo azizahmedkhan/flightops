@@ -1,0 +1,175 @@
+services:
+  # Database
+  - type: pspg
+    name: flightops-db
+    plan: starter
+    databaseName: flightops
+    user: flightops
+    postgresMajorVersion: 16
+
+  # Redis
+  - type: redis
+    name: flightops-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
+  # Knowledge Engine
+  - type: web
+    name: knowledge-engine
+    env: docker
+    dockerfilePath: ./services/knowledge-engine/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CHAT_MODEL
+        value: gpt-4o-mini
+      - key: EMBEDDINGS_MODEL
+        value: text-embedding-3-small
+      - key: DB_HOST
+        fromDatabase:
+          name: flightops-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: flightops-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: flightops-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: flightops-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: flightops-db
+          property: password
+
+  # Agent Service
+  - type: web
+    name: agent-svc
+    env: docker
+    dockerfilePath: ./services/agent-svc/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CHAT_MODEL
+        value: gpt-4o-mini
+      - key: KNOWLEDGE_SERVICE_URL
+        fromService:
+          name: knowledge-engine
+          type: web
+          property: host
+      - key: COMMS_URL
+        fromService:
+          name: comms-svc
+          type: web
+          property: host
+
+  # Comms Service
+  - type: web
+    name: comms-svc
+    env: docker
+    dockerfilePath: ./services/comms-svc/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CHAT_MODEL
+        value: gpt-4o-mini
+
+  # Ingest Service
+  - type: web
+    name: ingest-svc
+    env: docker
+    dockerfilePath: ./services/ingest-svc/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: EMBEDDINGS_MODEL
+        value: text-embedding-3-small
+      - key: DB_HOST
+        fromDatabase:
+          name: flightops-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: flightops-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: flightops-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: flightops-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: flightops-db
+          property: password
+
+  # Gateway API
+  - type: web
+    name: gateway-api
+    env: docker
+    dockerfilePath: ./services/gateway-api/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: AGENT_URL
+        fromService:
+          name: agent-svc
+          type: web
+          property: host
+      - key: KNOWLEDGE_SERVICE_URL
+        fromService:
+          name: knowledge-engine
+          type: web
+          property: host
+      - key: COMMS_URL
+        fromService:
+          name: comms-svc
+          type: web
+          property: host
+      - key: INGEST_URL
+        fromService:
+          name: ingest-svc
+          type: web
+          property: host
+      - key: DB_HOST
+        fromDatabase:
+          name: flightops-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: flightops-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: flightops-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: flightops-db
+          property: user
+      - key: DB_PASS
+        fromDatabase:
+          name: flightops-db
+          property: password
+
+  # Web UI
+  - type: web
+    name: web
+    env: docker
+    dockerfilePath: ./ui/web/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NEXT_PUBLIC_GATEWAY_URL
+        fromService:
+          name: gateway-api
+          type: web
+          property: host

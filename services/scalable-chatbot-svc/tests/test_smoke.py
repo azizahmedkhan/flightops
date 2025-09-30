@@ -14,9 +14,16 @@ import websockets
 
 DEFAULT_TIMEOUT = float(os.getenv("SMOKE_HTTP_TIMEOUT", "30"))  # 30 seconds for LLM processing
 MAX_MESSAGE_RETRIES = int(os.getenv("SMOKE_MESSAGE_RETRIES", "2"))  # Keep at 2 retries
-CONCURRENCY_LIMIT = int(os.getenv("SMOKE_CONCURRENCY_LIMIT", "10"))  # Reduce to 3 for stability
+CONCURRENCY_LIMIT = int(os.getenv("SMOKE_CONCURRENCY_LIMIT", "50"))  # Reduce to 3 for stability
 SESSION_COUNT = 50  # Testing higher concurrency
 
+MESSAGES: List[str] = [
+    "Hello there!",
+    "Can you help me with my booking?",
+    "When is the next flight to Wellington?",
+    "I need information about flight NZ123 from Auckland to Sydney",
+    "Thanks for the info!",
+]
 
 CHATBOT_BASE_URL = os.getenv("CHATBOT_BASE_URL", "http://localhost:8088")
 
@@ -42,17 +49,6 @@ pytestmark = pytest.mark.skipif(
     not _RUN_SMOKE_TESTS,
     reason=_SKIP_REASON or "Set RUN_LOAD_TESTS=1 to enable smoke tests",
 )
-
-
-MESSAGES: List[str] = [
-    "Hello there!",
-    "Can you help me with my booking?",
-    "When is the next flight to Wellington?",
-    "I need information about flight NZ123 from Auckland to Sydney",
-    "Thanks for the info!",
-]
-
-
 
 @pytest.mark.asyncio
 async def test_concurrent_sessions_smoke() -> None:
