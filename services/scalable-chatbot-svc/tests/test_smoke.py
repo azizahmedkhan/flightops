@@ -14,8 +14,8 @@ import websockets
 
 DEFAULT_TIMEOUT = float(os.getenv("SMOKE_HTTP_TIMEOUT", "30"))  # 30 seconds for LLM processing
 MAX_MESSAGE_RETRIES = int(os.getenv("SMOKE_MESSAGE_RETRIES", "2"))  # Keep at 2 retries
-CONCURRENCY_LIMIT = int(os.getenv("SMOKE_CONCURRENCY_LIMIT", "50"))  # Reduce to 3 for stability
-SESSION_COUNT = 50  # Testing higher concurrency
+CONCURRENCY_LIMIT = int(os.getenv("SMOKE_CONCURRENCY_LIMIT", "100"))  # Reduce to 3 for stability
+SESSION_COUNT = 100  # Testing higher concurrency
 
 MESSAGES: List[str] = [
     "Hello there!",
