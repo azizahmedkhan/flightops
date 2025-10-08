@@ -251,3 +251,7 @@ echo "4. Scale services:"
 echo "   kubectl scale deployment gateway-api -n flightops --replicas=3"
 echo ""
 echo -e "${YELLOW}⚠️  Note: It may take a few minutes for all services to be ready${NC}"
+
+
+
+
