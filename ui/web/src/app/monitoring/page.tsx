@@ -78,10 +78,10 @@ const SERVICE_DEFINITIONS: ServiceDefinition[] = [
     port: 8081,
     path: '/health',
     icon: Search,
-    cardClasses: 'bg-purple-50 border-purple-200',
-    iconClass: 'text-purple-700',
-    titleClass: 'text-purple-900',
-    subtitleClass: 'text-purple-700'
+    cardClasses: 'bg-gray-50 border-gray-200',
+    iconClass: 'text-gray-700',
+    titleClass: 'text-gray-900',
+    subtitleClass: 'text-gray-700'
   },
   {
     key: 'agent',

@@ -643,7 +643,7 @@ const ChatbotPage: React.FC = () => {
               </div>
               <div>
                 <div className="font-medium">Messages in Chat</div>
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-2xl font-bold text-gray-600">
                   {messages.length}
                 </div>
               </div>

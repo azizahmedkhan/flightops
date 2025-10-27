@@ -1,6 +1,6 @@
-# FlightOps Copilot — Business Functionality
+# AeroOps Copilot — Business Functionality
 
-**FlightOps Copilot** is an AI-powered assistant designed to help airlines manage **irregular operations (IRROPs)** such as delays, cancellations, and weather disruptions.  
+**AeroOps Copilot** is an AI-powered assistant designed to help airlines manage **irregular operations (IRROPs)** such as delays, cancellations, and weather disruptions.  
 It combines **knowledge-augmented generation (RAG)**, **tool-using agents**, and **enterprise guardrails** to support both operations staff and customer service teams.
 
 ### Key Business Use Cases
@@ -26,9 +26,9 @@ It combines **knowledge-augmented generation (RAG)**, **tool-using agents**, and
 
 ---
 
-# FlightOps Copilot — IRROPs-in-a-Box
+# AeroOps Copilot — IRROPs-in-a-Box
 
-A production-style, **agentic GenAI** demo tailored for airline operations (e.g., Air New Zealand) to showcase:
+A production-style, **agentic GenAI** demo tailored for airline operations (e.g., AiAir) to showcase:
 - Python microservices (FastAPI) + Docker
 - Knowledge Augmented Generation (RAG) with **pgvector**
 - Agent with **tool calls** (flight lookup, impact assessment, rebooking options, comms drafting, policy grounding)

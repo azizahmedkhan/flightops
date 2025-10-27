@@ -1,10 +1,10 @@
 #!/bin/bash
-# FlightOps - DigitalOcean Deployment Script
-# This script deploys FlightOps to DigitalOcean Kubernetes
+# AeroOps - DigitalOcean Deployment Script
+# This script deploys AeroOps to DigitalOcean Kubernetes
 
 set -e
 
-echo "🚀 Deploying FlightOps to DigitalOcean..."
+echo "🚀 Deploying AeroOps to DigitalOcean..."
 
 # Configuration
 CLUSTER_NAME="flightops-cluster"
@@ -230,7 +230,7 @@ WEB_IP=$(kubectl get svc web -n flightops -o jsonpath='{.status.loadBalancer.ing
 GATEWAY_IP=$(kubectl get svc gateway-api -n flightops -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 echo -e "${GREEN}════════════════════════════════════════${NC}"
-echo -e "${GREEN}🎉 FlightOps is now live on the internet!${NC}"
+echo -e "${GREEN}🎉 AeroOps is now live on the internet!${NC}"
 echo -e "${GREEN}════════════════════════════════════════${NC}"
 echo ""
 echo "🌐 Web UI: http://$WEB_IP"

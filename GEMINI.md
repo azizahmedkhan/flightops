@@ -1,8 +1,8 @@
-# FlightOps Copilot
+# AeroOps Copilot
 
 ## Project Overview
 
-This project is a FlightOps Copilot, an AI-powered assistant for airlines to manage irregular operations (IRROPs). It is built with a microservices architecture using Python (FastAPI) for the backend services and a Next.js (React) frontend. The system leverages a PostgreSQL database with the pgvector extension for storing and querying both structured data and vector embeddings for Knowledge Augmented Generation (RAG).
+This project is a AeroOps Copilot, an AI-powered assistant for airlines to manage irregular operations (IRROPs). It is built with a microservices architecture using Python (FastAPI) for the backend services and a Next.js (React) frontend. The system leverages a PostgreSQL database with the pgvector extension for storing and querying both structured data and vector embeddings for Knowledge Augmented Generation (RAG).
 
 The core functionalities include:
 - **Operational Decision Support:** Assessing passenger and crew impact, generating rebooking options, and grounding recommendations in airline policies.

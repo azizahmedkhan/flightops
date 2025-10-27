@@ -1,10 +1,10 @@
 # LLM Message Tracking Feature
 
-This document describes the LLM message tracking feature that has been added to the FlightOps system to display all prompts and responses from LLM interactions across all pages.
+This document describes the LLM message tracking feature that has been added to the AeroOps system to display all prompts and responses from LLM interactions across all pages.
 
 ## Overview
 
-The LLM message tracking feature provides real-time visibility into all LLM interactions across the FlightOps system. It displays prompts sent to the LLM and the responses received, along with metadata such as timing, token usage, and service information.
+The LLM message tracking feature provides real-time visibility into all LLM interactions across the AeroOps system. It displays prompts sent to the LLM and the responses received, along with metadata such as timing, token usage, and service information.
 
 ## Components
 

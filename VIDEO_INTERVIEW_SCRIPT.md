@@ -117,14 +117,14 @@ def route_query(message: str) -> str:
 
 **3. Dynamic Prompt Engineering**
 ```python
-def create_air_nz_system_prompt(context_str, grounding_info, query_type):
+def create_ai_air_system_prompt(context_str, grounding_info, query_type):
     # Creates context-aware prompts for the LLM
     # Includes only relevant information
     # Prevents hallucination by grounding responses
 ```
 
 **4. Response Formatting & Safety**
-- Air New Zealand-specific response formatting
+- AiAir-specific response formatting
 - Source citations for all claims
 - Safe fallback responses for unknown queries
 - Sentiment analysis integration
@@ -139,14 +139,14 @@ Let me walk through a real example to show you how this works in practice:
 3. **Builds context** with user's flight details
 4. **Creates prompt** with specific policy information
 5. **Generates response** with proper citations
-6. **Formats** in Air New Zealand style with bullet points
+6. **Formats** in AiAir style with bullet points
 
 **Result:**
 ```
 • Standard baggage allowance is 23kg for economy passengers
 • Business class passengers get 32kg allowance
 • Additional fees apply for excess baggage
-• [Source: Air New Zealand Baggage Policy, Section 2.1]
+• [Source: AiAir Baggage Policy, Section 2.1]
 
 Heads up: Always check your specific booking for exact allowances.
 ```

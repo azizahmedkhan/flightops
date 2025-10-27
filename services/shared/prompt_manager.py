@@ -1,5 +1,5 @@
 """
-Centralized prompt management for FlightOps Copilot services.
+Centralized prompt management for AeroOps Copilot services.
 All LLM prompts are defined here and can be referenced by any service.
 """
 

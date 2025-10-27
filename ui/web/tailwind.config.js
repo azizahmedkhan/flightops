@@ -7,7 +7,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Air New Zealand brand colors
+        // AiAir brand colors
         "anr-primary": "#0066B3",   // deep blue
         "anr-accent": "#FF6600",    // vibrant orange
         "anr-light": "#F5F5F5",     // light gray background
@@ -56,7 +56,7 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        // Air NZ uses "Helvetica Neue" and "Roboto" for digital
+        // AiAir uses "Helvetica Neue" and "Roboto" for digital
         sans: ["Helvetica Neue", "Roboto", "Arial", "sans-serif"],
       },
     },

@@ -1,6 +1,6 @@
-# User Testing Guide — FlightOps Copilot
+# User Testing Guide — AeroOps Copilot
 
-This document walks you through testing every feature of the FlightOps Copilot demo project.  
+This document walks you through testing every feature of the AeroOps Copilot demo project.  
 Follow these steps after the system is running with `docker compose up --build`.
 
 ---

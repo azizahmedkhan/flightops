@@ -48,7 +48,7 @@ function App(){
   return (
     <div className="min-h-screen p-6">
       <header className="max-w-5xl mx-auto mb-6">
-        <h1 className="text-3xl font-bold">FlightOps Copilot</h1>
+        <h1 className="text-3xl font-bold">AeroOps Copilot</h1>
         <p className="text-slate-600">RAG + Agents + Guardrails + Observability demo</p>
       </header>
       <main className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">

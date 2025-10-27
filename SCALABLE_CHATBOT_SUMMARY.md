@@ -248,7 +248,7 @@ Features:
 
 ## 🔄 Integration with Existing Services
 
-The chatbot integrates seamlessly with existing FlightOps services:
+The chatbot integrates seamlessly with existing AeroOps services:
 
 - **Knowledge Service**: Policy and document context
 - **Agent Service**: Flight data and operations
@@ -279,7 +279,7 @@ The chatbot integrates seamlessly with existing FlightOps services:
 ✅ **Intelligent Caching**: Reduces API costs by 70%  
 ✅ **Comprehensive Testing**: Full test suite with load testing  
 ✅ **Production Ready**: Docker, monitoring, security  
-✅ **Easy Integration**: Works with existing FlightOps services  
+✅ **Easy Integration**: Works with existing AeroOps services  
 ✅ **Modern Architecture**: Async, scalable, maintainable  
 
 ## 🚀 Next Steps

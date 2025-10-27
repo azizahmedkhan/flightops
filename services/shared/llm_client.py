@@ -1,5 +1,5 @@
 """
-Centralized LLM client for FlightOps services.
+Centralized LLM client for AeroOps services.
 Provides a single interface for all OpenAI chat completions with built-in logging and tracking.
 """
 

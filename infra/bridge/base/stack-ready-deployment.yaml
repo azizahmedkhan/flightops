@@ -28,4 +28,4 @@ spec:
                 - name: stack-ready
                   image: alpine:3.19
                   imagePullPolicy: IfNotPresent
-                  command: ['/bin/sh -c echo ''FlightOps stack is ready — visit http://localhost:3000''']
+                  command: ['/bin/sh -c echo ''AeroOps stack is ready — visit http://localhost:3000''']

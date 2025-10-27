@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flightops"
 version = "1.0.0"
-description = "FlightOps - Airline Operations Management System"
+description = "AeroOps - Airline Operations Management System"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.111.0",

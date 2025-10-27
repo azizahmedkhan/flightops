@@ -34,7 +34,7 @@ class BaseService:
         self.app = FastAPI(
             title=service_name,
             version=version,
-            description=f"{service_name} microservice for FlightOps"
+            description=f"{service_name} microservice for AeroOps"
         )
         self._setup_cors()
         self._setup_logging()

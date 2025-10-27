@@ -197,7 +197,7 @@ export default function DataPage() {
       name: 'Crew Roster',
       description: 'Crew assignments and scheduling',
       icon: Users,
-      color: 'bg-purple-500',
+      color: 'bg-gray-500',
       count: `${crewRoster.length} assignments`
     },
     {
@@ -383,7 +383,7 @@ export default function DataPage() {
               <button
                 onClick={handleRegenerateEmbeddings}
                 disabled={regenerating}
-                className="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center font-semibold transition-colors"
+                className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center font-semibold transition-colors"
               >
                 {regenerating ? (
                   <>
@@ -644,18 +644,18 @@ export default function DataPage() {
 
               {lastRegenerate && (
                 <div className={`p-4 rounded-lg flex items-center ${
-                  lastRegenerate.ok ? 'bg-purple-50 border border-purple-200' : 'bg-red-50 border border-red-200'
+                  lastRegenerate.ok ? 'bg-gray-50 border border-gray-200' : 'bg-red-50 border border-red-200'
                 }`}>
                   {lastRegenerate.ok ? (
-                    <CheckCircle className="h-5 w-5 text-purple-600 mr-3" />
+                    <CheckCircle className="h-5 w-5 text-gray-600 mr-3" />
                   ) : (
                     <AlertCircle className="h-5 w-5 text-red-600 mr-3" />
                   )}
                   <div>
-                    <p className={`font-medium ${lastRegenerate.ok ? 'text-purple-900' : 'text-red-900'}`}>
+                    <p className={`font-medium ${lastRegenerate.ok ? 'text-gray-900' : 'text-red-900'}`}>
                       {lastRegenerate.ok ? 'Embeddings Regenerated Successfully' : 'Regeneration Failed'}
                     </p>
-                    <p className={`text-sm ${lastRegenerate.ok ? 'text-purple-700' : 'text-red-700'}`}>
+                    <p className={`text-sm ${lastRegenerate.ok ? 'text-gray-700' : 'text-red-700'}`}>
                       {lastRegenerate.message}
                     </p>
                   </div>

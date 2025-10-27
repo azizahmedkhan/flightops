@@ -140,7 +140,7 @@ Enhance your existing scalable-chatbot-svc to integrate with the knowledge base:
 
 ### **Phase 6: System Prompt and Response Engineering**
 
-**Prompt 6: Implement Air New Zealand System Prompt and Response Formatting**
+**Prompt 6: Implement AiAir System Prompt and Response Formatting**
 ```
 Update the scalable-chatbot-svc with enterprise-ready system prompt and response formatting:
 
@@ -300,7 +300,7 @@ Enhance the existing services/scalable-chatbot-svc to integrate with the knowled
 
 ### **Phase 4: System Prompt and Response Engineering**
 
-**Prompt 4: Implement Air New Zealand System Prompt and Response Formatting**
+**Prompt 4: Implement AiAir System Prompt and Response Formatting**
 ```
 Update the scalable-chatbot-svc with enterprise-ready system prompt and response formatting:
 

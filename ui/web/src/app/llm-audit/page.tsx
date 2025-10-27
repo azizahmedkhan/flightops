@@ -96,7 +96,7 @@ export default function LLMAuditPage({}: LLMAuditPageProps) {
     const colors = {
       'agent-svc': 'bg-blue-100 text-blue-800 border-blue-200',
       'comms-svc': 'bg-green-100 text-green-800 border-green-200',
-      'customer-chat-svc': 'bg-purple-100 text-purple-800 border-purple-200',
+      'customer-chat-svc': 'bg-gray-100 text-gray-800 border-gray-200',
       'predictive-svc': 'bg-orange-100 text-orange-800 border-orange-200',
       'crew-svc': 'bg-pink-100 text-pink-800 border-pink-200',
       'knowledge-engine': 'bg-indigo-100 text-indigo-800 border-indigo-200',
@@ -129,7 +129,7 @@ export default function LLMAuditPage({}: LLMAuditPageProps) {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">LLM Audit Trail</h1>
           <p className="text-gray-600">
-            Complete audit trail of all LLM interactions across the FlightOps system
+            Complete audit trail of all LLM interactions across the AeroOps system
           </p>
         </div>
 

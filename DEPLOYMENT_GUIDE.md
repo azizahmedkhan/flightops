@@ -1,6 +1,6 @@
-# FlightOps Cloud Deployment Guide
+# AeroOps Cloud Deployment Guide
 
-Deploy FlightOps to the internet using one of these cloud platforms.
+Deploy AeroOps to the internet using one of these cloud platforms.
 
 ---
 
@@ -128,7 +128,7 @@ Deploy FlightOps to the internet using one of these cloud platforms.
    CLUSTER_NAME="flightops-cluster"
    ECR_REPO="flightops"
    
-   echo "🚀 Deploying FlightOps to AWS..."
+   echo "🚀 Deploying AeroOps to AWS..."
    
    # 1. Create ECR repository
    aws ecr create-repository --repository-name $ECR_REPO --region $REGION || true

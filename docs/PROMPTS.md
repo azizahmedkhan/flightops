@@ -1,6 +1,6 @@
-# FlightOps Copilot - Centralized Prompt Management
+# AeroOps Copilot - Centralized Prompt Management
 
-This file documents the centralized prompt management system for the FlightOps Copilot microservices. All LLM prompts are now managed from a single location and can be referenced by any service.
+This file documents the centralized prompt management system for the AeroOps Copilot microservices. All LLM prompts are now managed from a single location and can be referenced by any service.
 
 ## Table of Contents
 

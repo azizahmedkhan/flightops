@@ -1,5 +1,5 @@
 """
-Scalable Chatbot Service for FlightOps
+Scalable Chatbot Service for AeroOps
 Handles up to 1000 concurrent chat sessions with efficient ChatGPT integration
 """
 
@@ -203,7 +203,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         )
         # Import the new utility functions
         from chatbot_toolkit import (fetch_kb_context, fetch_database_context, route_query, format_kb_response, 
-                                     format_database_response, create_air_nz_system_prompt, format_air_nz_response, 
+                                     format_database_response, create_ai_air_system_prompt, format_ai_air_response, 
                                      add_heads_up_warning, get_safe_fallback_response)
         
         # Route the query to determine if it needs KB or flight status
@@ -225,7 +225,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             kb_chunks = await fetch_kb_context(user_message, KNOWLEDGE_SERVICE_URL)
             if kb_chunks:
                 response_metadata["kb_context"] = kb_chunks
-                # Format KB response with Air New Zealand style citations
+                # Format KB response with AiAir style citations
                 kb_response = format_kb_response(kb_chunks, response_metadata["sources"])
             else:
                 # Use safe fallback for unknown KB queries
@@ -235,7 +235,7 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             db_data = await fetch_database_context(user_message, DB_ROUTER_URL)
             if db_data:
                 response_metadata["database_context"] = db_data
-                # Format database response with Air New Zealand style citations
+                # Format database response with AiAir style citations
                 db_response = format_database_response(db_data, response_metadata["sources"])
             else:
                 # Use safe fallback for database queries
@@ -247,8 +247,8 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
         # Build context-aware prompt
         context_str = build_context_string(session_context)
 
-        # Create Air New Zealand system prompt
-        system_content = create_air_nz_system_prompt(
+        # Create AiAir system prompt
+        system_content = create_ai_air_system_prompt(
             context_str=context_str,
             grounding_info=kb_response or db_response,
             query_type=query_type
@@ -290,8 +290,8 @@ async def generate_streaming_response(session_id: str, user_message: str, sessio
             final_response = chatgpt_response
             sentiment_analysis = {}
         
-        # Format response according to Air New Zealand guidelines
-        final_response = format_air_nz_response(final_response, response_metadata["sources"])
+        # Format response according to AiAir guidelines
+        final_response = format_ai_air_response(final_response, response_metadata["sources"])
         
         # Simulate streaming by sending chunks
         words = final_response.split()

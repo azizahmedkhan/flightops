@@ -250,7 +250,7 @@ export default function CustomerChatPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Air New Zealand Airplane Background */}
+      {/* AiAir Airplane Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-gray-100 to-slate-200">
         <div className="absolute inset-0 opacity-15">
           {/* Airplane silhouette shapes */}

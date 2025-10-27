@@ -1,8 +1,8 @@
-# FlightOps AI Use Cases & Business Value
+# AeroOps AI Use Cases & Business Value
 
 ## Executive Summary
 
-FlightOps leverages AI and LLM technology to transform airline irregular operations (IRROPs) management from a manual, time-intensive process into an automated, intelligent system. This document outlines all AI use cases, their time savings, and business value to support investment decisions.
+AeroOps leverages AI and LLM technology to transform airline irregular operations (IRROPs) management from a manual, time-intensive process into an automated, intelligent system. This document outlines all AI use cases, their time savings, and business value to support investment decisions.
 
 **Key Metrics:**
 - **Time Savings**: 4-6 hours per major disruption
@@ -410,7 +410,7 @@ FlightOps leverages AI and LLM technology to transform airline irregular operati
 
 ## Conclusion
 
-The FlightOps AI implementation provides significant business value through:
+The AeroOps AI implementation provides significant business value through:
 
 1. **Immediate ROI**: 100-400% return in first year
 2. **Operational Efficiency**: 80-90% reduction in manual work
@@ -418,6 +418,6 @@ The FlightOps AI implementation provides significant business value through:
 4. **Compliance**: 95%+ regulatory compliance
 5. **Scalability**: 3-5x capacity increase with same staff
 
-The investment in AI technology will transform FlightOps from a reactive, manual operation into a proactive, intelligent system that delivers superior customer experience while dramatically reducing operational costs and complexity.
+The investment in AI technology will transform AeroOps from a reactive, manual operation into a proactive, intelligent system that delivers superior customer experience while dramatically reducing operational costs and complexity.
 
 **Recommendation**: Proceed with Phase 1 implementation immediately to begin realizing value within 3 months.

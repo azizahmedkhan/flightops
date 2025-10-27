@@ -264,10 +264,10 @@ async def fetch_kb_context(query: str, knowledge_service_url: str) -> Optional[L
 
 
 def route_query(message: str) -> str:
-    """Determine if query needs KB, database, or flight status for Air New Zealand"""
+    """Determine if query needs KB, database, or flight status for AiAir"""
     message_lower = message.lower()
     
-    # Keywords that suggest knowledge base queries (Air New Zealand specific)
+    # Keywords that suggest knowledge base queries (AiAir specific)
     kb_keywords = [
         "policy", "policies", "rule", "rules", "allowance", "baggage", "check-in", 
         "checkin", "excess", "fee", "fees", "dangerous", "goods", "fare", "rebooking", 
@@ -282,7 +282,7 @@ def route_query(message: str) -> str:
     database_keywords = [
         "flight", "status", "departure", "arrival", "gate", "terminal", "delay", 
         "cancelled", "cancelled", "on-time", "boarding", "departed", "landed",
-        "nz", "air new zealand", "akl", "wlg", "chc", "dud", "zqn", "npe",
+        "nz", "Ai Air", "akl", "wlg", "chc", "dud", "zqn", "npe",
         "next flight", "flights from", "flights to", "booking", "pnr", "reservation",
         "crew", "pilot", "flight attendant", "aircraft", "tail number", "passenger",
         "passengers", "count", "available", "duty", "roster", "schedule"
@@ -327,7 +327,7 @@ Heads up: Our support team has access to the most up-to-date information and can
 
 
 def format_kb_response(chunks: List[Dict[str, Any]], sources: List[str]) -> str:
-    """Format KB responses with Air New Zealand style formatting"""
+    """Format KB responses with AiAir style formatting"""
     if not chunks:
         return "I can't confirm from current info. Please contact our support team for assistance."
     
@@ -359,7 +359,7 @@ def format_kb_response(chunks: List[Dict[str, Any]], sources: List[str]) -> str:
 
 
 def format_database_response(db_data: Dict[str, Any], sources: List[str]) -> str:
-    """Format database responses with Air New Zealand style formatting"""
+    """Format database responses with AiAir style formatting"""
     if not db_data:
         return "I can't confirm from current info. Please contact our support team for assistance."
 
@@ -369,7 +369,7 @@ def format_database_response(db_data: Dict[str, Any], sources: List[str]) -> str
 
     source_index = len(sources) + 1
     source_label = f"[source {source_index}]"
-    sources.append("Air New Zealand operational database (historical schedule)")
+    sources.append("AiAir operational database (historical schedule)")
 
     if not rows:
         destination = args.get("destination")
@@ -399,10 +399,10 @@ def format_database_response(db_data: Dict[str, Any], sources: List[str]) -> str
     return f"{answer}\n\n{source_label}"
 
 
-def create_air_nz_system_prompt(context_str: str, grounding_info: str = None, query_type: str = "general") -> str:
-    """Create Air New Zealand system prompt with enterprise-ready restrictions"""
+def create_ai_air_system_prompt(context_str: str, grounding_info: str = None, query_type: str = "general") -> str:
+    """Create AiAir system prompt with enterprise-ready restrictions"""
 
-    base_prompt = """You are an Air New Zealand customer service agent. You must follow these strict guidelines:
+    base_prompt = """You are an AiAir customer service agent. You must follow these strict guidelines:
 
 RESPONSE RESTRICTIONS:
 - ONLY use information provided in the context below
@@ -453,8 +453,8 @@ direct customers to contact support for detailed assistance."""
 
     return base_prompt.format(context_str=context_str)
 
-def format_air_nz_response(response: str, sources: List[str] = None) -> str:
-    """Format response according to Air New Zealand guidelines"""
+def format_ai_air_response(response: str, sources: List[str] = None) -> str:
+    """Format response according to AiAir guidelines"""
     
     # If response is already formatted with bullet points, return as-is
     if response.startswith("•"):

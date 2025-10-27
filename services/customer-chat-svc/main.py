@@ -324,7 +324,7 @@ Dear {request.customer_name},
 {draft_content}
 
 Best regards,
-FlightOps Customer Service Team
+AeroOps Customer Service Team
 
 ---
 Flight: {request.flight_no}
@@ -335,7 +335,7 @@ Reference: {str(uuid.uuid4())[:8].upper()}"""
             sms_content = draft_content.replace('\n', ' ').strip()
             if len(sms_content) > 160:
                 sms_content = sms_content[:157] + "..."
-            formatted_content = f"FlightOps: {sms_content} - Flight {request.flight_no} on {request.date}"
+            formatted_content = f"AeroOps: {sms_content} - Flight {request.flight_no} on {request.date}"
         else:  # both
             sms_content = draft_content.replace('\n', ' ').strip()
             formatted_content = f"""EMAIL:
@@ -346,11 +346,11 @@ Dear {request.customer_name},
 {draft_content}
 
 Best regards,
-FlightOps Customer Service Team
+AeroOps Customer Service Team
 
 ---
 SMS:
-FlightOps: {sms_content[:100]}... - Flight {request.flight_no} on {request.date}"""
+AeroOps: {sms_content[:100]}... - Flight {request.flight_no} on {request.date}"""
         
         # Simulate sending (in production, integrate with actual email/SMS services)
         communication_id = str(uuid.uuid4())

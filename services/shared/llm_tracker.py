@@ -1,5 +1,5 @@
 """
-LLM message tracking utilities for FlightOps services.
+LLM message tracking utilities for AeroOps services.
 Provides centralized tracking of all LLM interactions across services.
 """
 

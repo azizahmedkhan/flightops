@@ -144,10 +144,10 @@ export default function PredictivePage() {
   return (
     <div className="relative min-h-screen">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-gray-50">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-16 right-16 w-80 h-32 bg-gradient-to-r from-blue-400 to-indigo-600 rounded-full transform rotate-12 opacity-20"></div>
-          <div className="absolute top-32 right-8 w-64 h-24 bg-gradient-to-r from-purple-300 to-pink-500 rounded-full transform rotate-6 opacity-15"></div>
+          <div className="absolute top-32 right-8 w-64 h-24 bg-gradient-to-r from-gray-300 to-pink-500 rounded-full transform rotate-6 opacity-15"></div>
           <div className="absolute top-48 right-24 w-48 h-16 bg-gradient-to-r from-indigo-400 to-blue-600 rounded-full transform -rotate-3 opacity-10"></div>
         </div>
       </div>

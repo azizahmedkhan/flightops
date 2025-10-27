@@ -1,379 +1,471 @@
-import type { CSSProperties } from 'react'
+'use client'
 
-type Stat = {
-  label: string
-  value: string
+import Link from 'next/link'
+import { motion, useScroll, useTransform, useInView } from 'framer-motion'
+import { useInView as useInViewObserver } from 'react-intersection-observer'
+import { useRef, useEffect, useState } from 'react'
+import { 
+  Plane, 
+  MessageSquare, 
+  Search, 
+  Database, 
+  Activity,
+  ArrowRight,
+  Zap,
+  Users,
+  Bot,
+  Globe,
+  Shield,
+  Clock,
+  TrendingUp,
+  Star,
+  CheckCircle
+} from 'lucide-react'
+import LLMTestComponent from './components/LLMTestComponent'
+import AnimatedFlightPaths from './components/AnimatedFlightPaths'
+
+// Animated Counter Component
+function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?: number }) {
+  const [count, setCount] = useState(0)
+  const { ref, inView } = useInViewObserver({
+    threshold: 0.3,
+    triggerOnce: true
+  })
+
+  useEffect(() => {
+    if (inView) {
+      let startTime: number
+      const animate = (currentTime: number) => {
+        if (!startTime) startTime = currentTime
+        const progress = Math.min((currentTime - startTime) / duration, 1)
+        setCount(Math.floor(progress * value))
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate)
+        }
+      }
+      requestAnimationFrame(animate)
+    }
+  }, [inView, value, duration])
+
+  return <span ref={ref}>{count.toLocaleString()}</span>
 }
 
-type Feature = {
-  icon: string
-  title: string
-  description: string
-  highlight: string
-}
-
-type WorkflowStep = {
-  time: string
-  title: string
-  detail: string
-}
-
-const stats: Stat[] = [
-  { label: 'On-time performance lift', value: '▲ 12%' },
-  { label: 'Delay predictions', value: '97% accuracy' },
-  { label: 'Operational savings', value: '$4.3M / yr' },
-  { label: 'Crew swaps automated', value: '840 / mo' },
-]
-
-const features: Feature[] = [
-  {
-    icon: '🛰️',
-    title: 'Live Operations Canvas',
-    description:
-      'Fuse flight tracking, crew rosters, maintenance schedules, and weather into a living source of truth.',
-    highlight: 'Hyper-focused alerts anticipate disruptions hours before they appear on public radars.',
-  },
-  {
-    icon: '🧠',
-    title: 'Adaptive AI Copilot',
-    description:
-      'An orchestration layer that drafts comms, proposes recovery plans, and coordinates stakeholders instantly.',
-    highlight: 'Every recommendation cites data lineage so controllers can make confident, auditable decisions.',
-  },
-  {
-    icon: '⚡',
-    title: 'Workflow Automations',
-    description:
-      'Trigger crew notifications, reroute aircraft, and sync systems with no-code playbooks tailored to your airline.',
-    highlight: 'AeroOps integrates with your stack, from ACARS to Slack, without compromising safety gates.',
-  },
-]
-
-const workflow: WorkflowStep[] = [
-  {
-    time: 'T-6 hrs',
-    title: 'Demand surge detected',
-    detail: 'AI models sense atypical load factors across the morning bank and spin up proactive recovery options.',
-  },
-  {
-    time: 'T-2 hrs',
-    title: 'Weather deviations plotted',
-    detail: 'AeroOps simulates 12 routing scenarios, highlighting a reroute that protects crew duty limits.',
-  },
-  {
-    time: 'Gate',
-    title: 'Comms launched automatically',
-    detail: 'Passengers and crew receive synchronized updates while ops monitors a confidence feed in real time.',
-  },
-]
-
-const integrations = ['FlightAware', 'SITA', 'Amadeus', 'Snowflake', 'Slack', 'PagerDuty']
-
-const testimonial = {
-  quote:
-    '“AeroOps transformed our nerve center. We see what matters sooner, act faster, and close the loop with passengers without breaking a sweat.”',
-  author: 'Leilani Moore',
-  role: 'Director of Integrated Operations, Pacific Horizon Air',
-}
-
-type GlowOrbProps = {
-  className?: string
-  color: string
-  size?: string
-  opacity?: number
-}
-
-function GlowOrb({ className = '', color, size = '30rem', opacity = 0.55 }: GlowOrbProps) {
-  const style: CSSProperties = {
-    background: `radial-gradient(circle, ${color} 0%, transparent 65%)`,
-    width: size,
-    height: size,
-    opacity,
-  }
-
-  return <div className={`pointer-events-none absolute rounded-full blur-3xl ${className}`} style={style} />
-}
-
-function FlightPath() {
+// Floating Plane Animation Component
+function FloatingPlane({ className, delay = 0 }: { className?: string; delay?: number }) {
   return (
-    <svg viewBox="0 0 360 200" className="h-full w-full">
-      <defs>
-        <linearGradient id="flight-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#67e8f9" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.9" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M20 160 C 120 20, 220 220, 340 80"
-        fill="none"
-        stroke="url(#flight-gradient)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray="12 12"
-        className="animate-dash"
-      />
-      <g className="animate-float" transform="translate(0, -8)">
-        <circle cx="340" cy="80" r="8" fill="#22d3ee" />
-        <path d="M330 80 L342 83 L338 80 L342 77 Z" fill="#0ea5e9" opacity={0.9} />
-      </g>
-      <g>
-        <circle cx="70" cy="120" r="5" fill="#bae6fd" opacity={0.8} />
-        <circle cx="140" cy="70" r="5" fill="#bae6fd" opacity={0.8} />
-        <circle cx="220" cy="140" r="5" fill="#bae6fd" opacity={0.8} />
-      </g>
-    </svg>
-  )
-}
-
-function FeatureCard({ feature }: { feature: Feature }) {
-  return (
-    <article className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur transition-transform duration-300 hover:-translate-y-2 hover:border-cyan-400/40">
-      <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-cyan-500/10 blur-3xl transition-opacity duration-300 group-hover:opacity-100" />
-      <div className="relative">
-        <span className="text-3xl">{feature.icon}</span>
-        <h3 className="mt-4 text-2xl font-semibold text-white">{feature.title}</h3>
-        <p className="mt-3 text-base leading-relaxed text-slate-300">{feature.description}</p>
-        <p className="mt-4 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-          {feature.highlight}
-        </p>
-      </div>
-    </article>
-  )
-}
-
-function WorkflowItem({ step }: { step: WorkflowStep }) {
-  return (
-    <div className="relative pl-10">
-      <div className="absolute left-0 top-1 h-3 w-3 rounded-full border border-cyan-300/80 bg-cyan-400/60" />
-      <div className="absolute left-1 top-1 h-full w-px bg-gradient-to-b from-cyan-400/40 via-cyan-400/10 to-transparent" />
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200/80">{step.time}</p>
-        <h4 className="mt-2 text-xl font-semibold text-white">{step.title}</h4>
-        <p className="mt-3 text-sm leading-relaxed text-slate-300">{step.detail}</p>
-      </div>
-    </div>
+    <motion.div
+      className={className}
+      animate={{
+        y: [-10, 10, -10],
+        x: [-5, 5, -5],
+        rotate: [-2, 2, -2]
+      }}
+      transition={{
+        duration: 6,
+        delay,
+        repeat: Infinity,
+        ease: "easeInOut"
+      }}
+    >
+      <Plane className="h-8 w-8 text-white/70" />
+    </motion.div>
   )
 }
 
 export default function HomePage() {
-  const year = new Date().getFullYear()
+  const { scrollYProgress } = useScroll()
+  const heroRef = useRef(null)
+  const featuresRef = useRef(null)
+  const statsRef = useRef(null)
+  
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, -150])
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, -300])
+  const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0])
+
+  const features = [
+    {
+      title: 'Flight Query',
+      description: 'Ask questions about flight disruptions and get AI-powered insights',
+      icon: Plane,
+      href: '/query',
+      gradient: 'from-blue-600 to-gray-600'
+    },
+    {
+      title: 'Predictive Analytics',
+      description: 'AI-powered disruption prediction and proactive management',
+      icon: Zap,
+      href: '/predictive',
+      gradient: 'from-yellow-500 to-orange-600'
+    },
+    {
+      title: 'Crew Management',
+      description: 'Intelligent crew optimization and resource management',
+      icon: Users,
+      href: '/crew',
+      gradient: 'from-green-500 to-teal-600'
+    },
+    {
+      title: 'Draft Communications',
+      description: 'Generate empathetic customer communications with policy grounding',
+      icon: MessageSquare,
+      href: '/comms',
+      gradient: 'from-gray-600 to-pink-600'
+    },
+    {
+      title: 'Knowledge Search',
+      description: 'Search through policies and procedures with semantic search',
+      icon: Search,
+      href: '/search',
+      gradient: 'from-indigo-600 to-blue-600'
+    },
+    {
+      title: 'Data Management',
+      description: 'Manage flight data, bookings, and crew rosters',
+      icon: Database,
+      href: '/data',
+      gradient: 'from-gray-700 to-gray-900'
+    },
+    {
+      title: 'System Monitoring',
+      description: 'Monitor service health and performance metrics',
+      icon: Activity,
+      href: '/monitoring',
+      gradient: 'from-red-500 to-pink-600'
+    },
+    {
+      title: 'Customer Communication',
+      description: 'Test customer chat, email, and SMS communication',
+      icon: MessageSquare,
+      href: '/customer-chat',
+      gradient: 'from-cyan-500 to-blue-600'
+    },
+    {
+      title: 'Scalable Chatbot',
+      description: 'High-performance chatbot supporting 1000+ concurrent sessions',
+      icon: Bot,
+      href: '/chatbot',
+      gradient: 'from-gray-600 to-gray-700'
+    }
+  ]
+
+  const stats = [
+    { label: 'Flights Monitored Daily', value: 2500, icon: Plane },
+    { label: 'AI Predictions Made', value: 15000, icon: TrendingUp },
+    { label: 'Customer Interactions', value: 45000, icon: MessageSquare },
+    { label: 'System Uptime', value: 99.9, suffix: '%', icon: Shield }
+  ]
+
+  const benefits = [
+    'Real-time flight disruption management',
+    'Automated customer communication',
+    'Predictive maintenance scheduling',
+    'Intelligent crew optimization',
+    'Policy-grounded AI responses',
+    '24/7 system monitoring'
+  ]
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-black" />
-        <div className="absolute inset-0 bg-grid opacity-30" />
-        <GlowOrb className="-top-40 -left-20" color="rgba(56, 189, 248, 0.55)" size="36rem" />
-        <GlowOrb className="top-1/3 -right-10" color="rgba(14, 165, 233, 0.5)" size="28rem" opacity={0.4} />
-        <GlowOrb className="bottom-[-8rem] left-1/2 -translate-x-1/2" color="rgba(59, 130, 246, 0.45)" size="42rem" opacity={0.35} />
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Animated Flight Paths */}
+        <AnimatedFlightPaths />
+        
+        {/* Gradient Orbs */}
+        <motion.div
+          style={{ y: y1 }}
+          className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-gray-600/20 rounded-full blur-3xl"
+        />
+        <motion.div
+          style={{ y: y2 }}
+          className="absolute -bottom-24 -right-24 w-96 h-96 bg-gradient-to-br from-orange-400/20 to-pink-600/20 rounded-full blur-3xl"
+        />
+        
+        {/* Floating Planes */}
+        <FloatingPlane className="absolute top-20 left-1/4" delay={0} />
+        <FloatingPlane className="absolute top-40 right-1/3" delay={1} />
+        <FloatingPlane className="absolute bottom-40 left-1/3" delay={2} />
       </div>
 
-      <div className="relative z-10">
-        <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-8 lg:px-10">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/10 shadow-lg shadow-cyan-500/20">
-              <div className="absolute inset-0 animate-shimmer bg-[linear-gradient(120deg,transparent,rgba(56,189,248,0.45),transparent)]" />
-              <span className="relative text-lg font-semibold text-sky-200">AO</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-300">AeroOps</p>
-              <p className="text-xs text-slate-400">AI command center for airline operations</p>
-            </div>
-          </div>
-          <div className="hidden items-center gap-6 text-sm text-slate-300 md:flex">
-            <a href="#features">Platform</a>
-            <a href="#workflow">Playbooks</a>
-            <a href="#testimonial">Customer proof</a>
-          </div>
-          <button className="hidden rounded-full border border-cyan-400/40 bg-cyan-500/20 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-cyan-500/20 backdrop-blur md:inline-flex">
-            Book a live demo
-          </button>
-        </header>
-
-        <main>
-          <section className="mx-auto flex max-w-6xl flex-col gap-16 px-6 pb-24 pt-12 lg:flex-row lg:items-center lg:px-10">
-            <div className="flex-1">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-cyan-200/90">
-                Next-gen airline ops
-                <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_0_6px_rgba(34,211,238,0.25)]" />
+      {/* Hero Section */}
+      <motion.section
+        ref={heroRef}
+        style={{ opacity }}
+        className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8"
+      >
+        <div className="text-center max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="mb-8"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.6, type: "spring" }}
+              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-gray-600 rounded-full mb-8 shadow-2xl"
+            >
+              <Zap className="h-10 w-10 text-white" />
+            </motion.div>
+            
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.8 }}
+              className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-gray-900 via-black to-gray-800 bg-clip-text text-transparent mb-6"
+            >
+              <span className="bg-gradient-to-r from-blue-600 to-gray-600 bg-clip-text text-transparent">
+                AeroOps AI
               </span>
-              <h1 className="mt-6 text-4xl font-semibold leading-tight text-white md:text-6xl">
-                Orchestrate every flight with{' '}
-                <span className="bg-gradient-to-r from-sky-300 via-cyan-200 to-blue-400 bg-clip-text text-transparent">AeroOps</span>
-              </h1>
-              <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-                A mission control for network operations teams. AeroOps predicts disruptions, spins up recovery strategies, and keeps crews and passengers in sync—automatically.
-              </p>
-              <div className="mt-10 flex flex-wrap items-center gap-4">
-                <button className="rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-xl shadow-cyan-500/30 transition hover:brightness-110">
-                  Launch my command center
-                </button>
-                <button className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:border-white/40">
-                  Explore the platform
-                </button>
-              </div>
-              <dl className="mt-14 grid grid-cols-2 gap-6 sm:grid-cols-4">
-                {stats.map((stat) => (
-                  <div key={stat.label} className="rounded-3xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur">
-                    <dt className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{stat.label}</dt>
-                    <dd className="mt-3 text-xl font-semibold text-white">{stat.value}</dd>
+            </motion.h1>
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.8 }}
+            className="text-xl md:text-2xl text-gray-700 max-w-4xl mx-auto mb-12 leading-relaxed font-medium"
+          >
+            Revolutionizing flight operations with intelligent AI agents that handle disruptions, 
+            draft customer communications, and maintain operational excellence with unprecedented precision.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.8 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
+          >
+            <Link
+              href="/query"
+              className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-gray-600 text-white font-semibold rounded-full shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+            >
+              <span className="flex items-center justify-center">
+                <Plane className="mr-2 h-5 w-5" />
+                Start Flight Query
+                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </span>
+            </Link>
+            <Link
+              href="/chatbot"
+              className="px-8 py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-full hover:border-gray-900 hover:text-gray-900 transition-all duration-300 transform hover:scale-105"
+            >
+              Talk to AeroOps
+            </Link>
+          </motion.div>
+
+          {/* Quick Benefits */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 0.8 }}
+            className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-3xl mx-auto"
+          >
+            {benefits.slice(0, 3).map((benefit, index) => (
+              <motion.div
+                key={benefit}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 1.2 + index * 0.1, duration: 0.5 }}
+                className="flex items-center text-sm text-gray-600 font-medium"
+              >
+                <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+                {benefit}
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </motion.section>
+
+      {/* Stats Section */}
+      <motion.section
+        ref={statsRef}
+        className="py-20 px-4 sm:px-6 lg:px-8 relative"
+      >
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Powered by Real Performance
+            </h2>
+            <p className="text-xl text-gray-600">
+              See the impact of our AI-powered flight operations system
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {stats.map((stat, index) => {
+              const Icon = stat.icon
+              return (
+                <motion.div
+                  key={stat.label}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.6 }}
+                  viewport={{ once: true }}
+                  className="text-center group"
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.1 }}
+                    className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-gray-600 rounded-full mb-4 shadow-lg group-hover:shadow-2xl transition-all duration-300"
+                  >
+                    <Icon className="h-8 w-8 text-white" />
+                  </motion.div>
+                  <div className="text-3xl font-bold text-gray-900 mb-2">
+                    <AnimatedCounter value={stat.value} />
+                    {stat.suffix && <span>{stat.suffix}</span>}
                   </div>
-                ))}
-              </dl>
-            </div>
-
-            <div className="relative flex flex-1 flex-col gap-6">
-              <div className="absolute -top-10 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full border border-cyan-300/20 bg-cyan-400/10 blur-3xl" />
-              <div className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-white/5 p-8 shadow-2xl shadow-cyan-500/20 backdrop-blur">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="uppercase tracking-[0.4em] text-cyan-200/80">Ops Pulse</span>
-                  <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-                    Live feed
-                  </span>
-                </div>
-                <div className="relative mt-6 h-56 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                  <FlightPath />
-                  <div className="absolute inset-x-4 bottom-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-300 backdrop-blur">
-                    <div>
-                      <p className="font-semibold text-white">AKL ➜ LAX</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.35em] text-cyan-200/70">Projected arrival 21m early</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-white">Crew green</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.35em] text-emerald-200/70">Turn readiness 96%</p>
-                    </div>
+                  <div className="text-sm text-gray-600 font-medium">
+                    {stat.label}
                   </div>
-                </div>
-                <div className="mt-6 grid grid-cols-2 gap-4 text-xs text-slate-300">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-200/70">AI Advisory</p>
-                    <p className="mt-2 text-sm text-white">Reassign 2 crew to NZ78 to protect duty limits.</p>
-                  </div>
-                  <div className="relative rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-200/70">Passenger sentiment</p>
-                    <p className="mt-2 text-sm text-white">92% of guests already notified via preferred channel.</p>
-                    <span className="absolute -right-2 -top-2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-cyan-400/20 text-base font-semibold text-cyan-100 shadow-lg shadow-cyan-500/20">
-                      +17%
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center justify-between rounded-3xl border border-white/10 bg-white/5 p-5 text-xs text-slate-300 backdrop-blur">
-                <div>
-                  <p className="uppercase tracking-[0.4em] text-cyan-200/70">System Health</p>
-                  <p className="mt-2 text-sm text-white">Data pipelines nominal · Models synced 4 minutes ago</p>
-                </div>
-                <div className="relative flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/10">
-                  <div className="absolute inset-0 rounded-full border border-cyan-300/40" />
-                  <div className="absolute inset-1 rounded-full border border-cyan-200/40" />
-                  <span className="relative text-lg font-semibold text-cyan-100">99</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section id="features" className="bg-white/5 py-24">
-            <div className="mx-auto max-w-6xl px-6 lg:px-10">
-              <div className="mx-auto max-w-3xl text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-cyan-200/70">Platform capabilities</p>
-                <h2 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
-                  Everything your ops center needs in one adaptive surface
-                </h2>
-                <p className="mt-4 text-base leading-relaxed text-slate-300">
-                  Designed with controllers, dispatchers, and customer teams to orchestrate complex networks with calm precision.
-                </p>
-              </div>
-              <div className="mt-16 grid gap-8 md:grid-cols-3">
-                {features.map((feature) => (
-                  <FeatureCard key={feature.title} feature={feature} />
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section id="workflow" className="py-24">
-            <div className="mx-auto max-w-6xl px-6 lg:px-10">
-              <div className="grid gap-16 lg:grid-cols-[1fr_1.2fr] lg:items-center">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.4em] text-cyan-200/70">Playbook in action</p>
-                  <h2 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
-                    See how AeroOps guides teams through disruption
-                  </h2>
-                  <p className="mt-4 text-base leading-relaxed text-slate-300">
-                    The platform senses irregular ops, proposes confident resolutions, and keeps every stakeholder aligned—without burning out your controllers.
-                  </p>
-                </div>
-                <div className="space-y-8">
-                  {workflow.map((step) => (
-                    <WorkflowItem key={step.title} step={step} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-white/5 py-24" id="testimonial">
-            <div className="mx-auto max-w-5xl px-6 text-center lg:px-10">
-              <div className="relative overflow-hidden rounded-[2.75rem] border border-white/10 bg-gradient-to-br from-slate-900/90 via-slate-950/90 to-black p-10 shadow-2xl shadow-cyan-500/20">
-                <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
-                <div className="absolute -bottom-24 right-10 h-56 w-56 rounded-full bg-sky-500/10 blur-3xl" />
-                <div className="relative">
-                  <p className="text-lg leading-relaxed text-slate-200 md:text-xl">{testimonial.quote}</p>
-                  <div className="mt-8 flex flex-col items-center gap-1 text-sm text-slate-300">
-                    <span className="font-semibold text-white">{testimonial.author}</span>
-                    <span>{testimonial.role}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="py-20">
-            <div className="mx-auto max-w-5xl px-6 text-center lg:px-10">
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-cyan-200/70">Trusted connections</p>
-              <div className="mt-8 grid grid-cols-2 gap-6 text-sm text-slate-300 sm:grid-cols-3 md:text-base">
-                {integrations.map((logo) => (
-                  <div key={logo} className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-center backdrop-blur">
-                    {logo}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="pb-24">
-            <div className="mx-auto max-w-5xl overflow-hidden rounded-[2.5rem] border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 via-slate-950 to-slate-950 px-10 py-16 text-center shadow-2xl shadow-cyan-500/30">
-              <p className="text-xs font-semibold uppercase tracking-[0.4em] text-cyan-200/80">Ready for wheels up</p>
-              <h2 className="mt-4 text-3xl font-semibold text-white md:text-4xl">
-                Bring calm to the chaos of airline operations
-              </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-300">
-                Let AeroOps become your always-on co-strategist—from planning to day-of-execution, across every airport, aircraft, and crew.
-              </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-4">
-                <button className="rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500 px-7 py-3 text-sm font-semibold text-slate-950 shadow-xl shadow-cyan-500/40 transition hover:brightness-110">
-                  Schedule a strategy session
-                </button>
-                <button className="rounded-full border border-white/20 px-7 py-3 text-sm font-semibold text-white/90 backdrop-blur transition hover:border-white/40">
-                  Download the product brief
-                </button>
-              </div>
-            </div>
-          </section>
-        </main>
-
-        <footer className="border-t border-white/10 bg-black/40 py-10">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between lg:px-10">
-            <p>© {year} AeroOps. Engineered for resilient airline operations.</p>
-            <div className="flex gap-6">
-              <a href="#features">Platform</a>
-              <a href="#workflow">Playbooks</a>
-              <a href="#testimonial">Stories</a>
-            </div>
+                </motion.div>
+              )
+            })}
           </div>
-        </footer>
-      </div>
+        </div>
+      </motion.section>
+
+      {/* Features Section */}
+      <motion.section
+        ref={featuresRef}
+        className="py-20 px-4 sm:px-6 lg:px-8 relative"
+      >
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Comprehensive AI Solutions
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              From predictive analytics to customer communications, our platform covers every aspect of modern flight operations.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => {
+              const Icon = feature.icon
+              return (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.6 }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -5 }}
+                  className="group"
+                >
+                  <Link href={feature.href}>
+                    <div className="h-full bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200/50 hover:border-white relative overflow-hidden">
+                      {/* Gradient Background on Hover */}
+                      <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+                      
+                      <div className="relative z-10">
+                        <motion.div
+                          whileHover={{ scale: 1.1, rotate: 5 }}
+                          transition={{ type: "spring", stiffness: 300 }}
+                          className={`inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br ${feature.gradient} rounded-xl mb-6 shadow-lg`}
+                        >
+                          <Icon className="h-7 w-7 text-white" />
+                        </motion.div>
+
+                        <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-gray-700 transition-colors">
+                          {feature.title}
+                        </h3>
+                        <p className="text-gray-600 mb-6 leading-relaxed">
+                          {feature.description}
+                        </p>
+                        
+                        <div className="flex items-center text-gray-700 font-semibold group-hover:text-gray-900 transition-colors">
+                          Explore
+                          <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-2 transition-transform duration-300" />
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              )
+            })}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* CTA Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+        className="py-20 px-4 sm:px-6 lg:px-8 relative"
+      >
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            className="bg-gradient-to-br from-blue-600 via-gray-600 to-slate-700 rounded-3xl p-12 shadow-2xl relative overflow-hidden"
+            whileHover={{ scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 300 }}
+          >
+            {/* Animated background elements */}
+            <div className="absolute inset-0 overflow-hidden">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                className="absolute -top-10 -right-10 w-32 h-32 border border-white/20 rounded-full"
+              />
+              <motion.div
+                animate={{ rotate: -360 }}
+                transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+                className="absolute -bottom-10 -left-10 w-40 h-40 border border-white/10 rounded-full"
+              />
+            </div>
+
+            <div className="relative z-10">
+              <h2 className="text-4xl font-bold text-white mb-6">
+                Ready to Transform Your Operations?
+              </h2>
+              <p className="text-xl text-white/90 mb-8 leading-relaxed">
+                Join the future of flight operations with AI-powered intelligence that never sleeps.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  href="/query"
+                  className="px-8 py-4 bg-white text-blue-600 font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:bg-gray-50"
+                >
+                  Start Your First Query
+                </Link>
+                <Link
+                  href="/data"
+                  className="px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-full hover:bg-white/10 transition-all duration-300 transform hover:scale-105"
+                >
+                  Explore Demo Data
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </motion.section>
+
+      {/* LLM Test Component */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        viewport={{ once: true }}
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20"
+      >
+        <LLMTestComponent />
+      </motion.div>
     </div>
   )
 }

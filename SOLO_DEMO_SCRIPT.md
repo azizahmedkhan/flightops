@@ -40,7 +40,7 @@ I have built a scalable chat service that keeps hundreds of users chatting simul
 ## 5. Context Engineering Deep Dive (5:30 – 7:30)
 "Here’s where accuracy comes from. We run `route_query` to classify intent—policy, database, or flight (`chatbot_toolkit.py:266`). Based on that tag we fetch the right data: policy snippets from the knowledge engine or operational facts from the DB router (`main.py:246`).
 
-All of that context lands inside `create_air_nz_system_prompt` (`chatbot_toolkit.py:402`). The template injects session details—customer name, flight number—and hard rules like 'don’t invent information, always cite sources'. After the model responds, `format_air_nz_response` rewrites it into bullet points with footnotes and optional 'Heads up' warnings (`chatbot_toolkit.py:456`)."
+All of that context lands inside `create_ai_air_system_prompt` (`chatbot_toolkit.py:402`). The template injects session details—customer name, flight number—and hard rules like 'don’t invent information, always cite sources'. After the model responds, `format_ai_air_response` rewrites it into bullet points with footnotes and optional 'Heads up' warnings (`chatbot_toolkit.py:456`)."
 
 [Show prompt template and formatter side-by-side]
 

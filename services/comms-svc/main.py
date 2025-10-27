@@ -51,7 +51,7 @@ Most passengers will be rebooked within 2 hours of the original departure time.
 Thank you for your patience and understanding.
 
 Best regards,
-Air New Zealand Customer Service Team
+AiAir Customer Service Team
 
 ---
 **Policy References:**
@@ -62,7 +62,7 @@ Air New Zealand Customer Service Team
 
 # SMS template
 SMS_TEMPLATE = Template("""
-Air NZ: Flight {{ flight_no }} on {{ date }} is delayed due to {{ issue }}. 
+AiAir: Flight {{ flight_no }} on {{ date }} is delayed due to {{ issue }}. 
 
 Impact: {{ impact_summary }}
 

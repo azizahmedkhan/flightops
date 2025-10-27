@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="flightops",
     version="1.0.0",
-    description="FlightOps - Airline Operations Management System",
+    description="AeroOps - Airline Operations Management System",
     packages=find_packages(where="services"),
     package_dir={"": "services"},
     python_requires=">=3.11",

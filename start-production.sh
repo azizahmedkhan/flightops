@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# FlightOps Production Startup Script
+# AeroOps Production Startup Script
 
-echo "🚀 Starting FlightOps in Production Mode..."
+echo "🚀 Starting AeroOps in Production Mode..."
 
 # Check if .env file exists
 if [ ! -f .env ]; then
@@ -30,7 +30,7 @@ sleep 10
 echo "🔍 Checking service health..."
 docker compose -f infra/docker-compose.prod.yml ps
 
-echo "✅ FlightOps is running in production mode!"
+echo "✅ AeroOps is running in production mode!"
 echo "🌐 Web UI: http://localhost:3000"
 echo "🔗 Gateway API: http://localhost:8080"
 echo "📊 API Docs: http://localhost:8080/docs"

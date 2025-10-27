@@ -1,4 +1,4 @@
-# 🚀 Quick Deploy FlightOps to the Internet
+# 🚀 Quick Deploy AeroOps to the Internet
 
 Choose the fastest option for you:
 
@@ -216,7 +216,7 @@ docker compose logs -f gateway-api
 
 ## 🎉 **You're All Set!**
 
-Your FlightOps app is now live on the internet and ready to handle irregular operations for airlines worldwide!
+Your AeroOps app is now live on the internet and ready to handle irregular operations for airlines worldwide!
 
 **What's Next?**
 1. Share your demo URL

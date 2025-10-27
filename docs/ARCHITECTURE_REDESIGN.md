@@ -1,4 +1,4 @@
-# FlightOps Lean Architecture Proposal
+# AeroOps Lean Architecture Proposal
 
 ## Goals Tailored for the Interview Demo
 - Keep the story simple: one customer-facing service, one knowledge service, one ingestion worker.

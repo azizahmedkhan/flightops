@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Air NZ fonts */
+/* Import AiAir fonts */
 @import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;600&family=Roboto:wght@400;500&display=swap');
 
-/* Apply global styles using Air NZ brand colors */
+/* Apply global styles using AiAir brand colors */
 html, body, #__next {
   @apply font-sans text-anr-dark bg-anr-light min-h-screen;
 }
