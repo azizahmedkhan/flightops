@@ -68,7 +68,7 @@ function FloatingPlane({ className, delay = 0 }: { className?: string; delay?: n
         ease: "easeInOut"
       }}
     >
-      <Plane className="h-8 w-8 text-white/70" />
+      <Plane className="h-8 w-8 text-gray-700/70" />
     </motion.div>
   )
 }
@@ -110,7 +110,7 @@ export default function HomePage() {
       description: 'Generate empathetic customer communications with policy grounding',
       icon: MessageSquare,
       href: '/comms',
-      gradient: 'from-gray-600 to-pink-600'
+      gradient: 'from-slate-600 to-blue-600'
     },
     {
       title: 'Knowledge Search',
@@ -131,7 +131,7 @@ export default function HomePage() {
       description: 'Monitor service health and performance metrics',
       icon: Activity,
       href: '/monitoring',
-      gradient: 'from-red-500 to-pink-600'
+      gradient: 'from-red-500 to-orange-600'
     },
     {
       title: 'Customer Communication',
@@ -167,19 +167,23 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Animated Background Elements */}
+      {/* Liquid Blob Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Animated Flight Paths */}
         <AnimatedFlightPaths />
         
-        {/* Gradient Orbs */}
+        {/* Floating Liquid Blobs */}
         <motion.div
           style={{ y: y1 }}
-          className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-gray-600/20 rounded-full blur-3xl"
+          className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-slate-400/20 liquid-blob blur-3xl"
         />
         <motion.div
-          style={{ y: y2 }}
-          className="absolute -bottom-24 -right-24 w-96 h-96 bg-gradient-to-br from-orange-400/20 to-pink-600/20 rounded-full blur-3xl"
+          style={{ y: y2, animationDelay: '2s' } as any}
+          className="absolute -bottom-24 -right-24 w-96 h-96 bg-gradient-to-br from-slate-400/20 to-gray-400/20 liquid-blob blur-3xl"
+        />
+        <motion.div
+          style={{ animationDelay: '4s' } as any}
+          className="absolute top-1/3 left-1/2 w-80 h-80 bg-gradient-to-br from-slate-300/15 to-blue-300/15 liquid-blob blur-3xl"
         />
         
         {/* Floating Planes */}
@@ -205,7 +209,7 @@ export default function HomePage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, duration: 0.6, type: "spring" }}
-              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 to-gray-600 rounded-full mb-8 shadow-2xl"
+              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 via-slate-700 to-gray-700 rounded-3xl mb-8 shadow-2xl"
             >
               <Zap className="h-10 w-10 text-white" />
             </motion.div>
@@ -214,11 +218,9 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.8 }}
-              className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-gray-900 via-black to-gray-800 bg-clip-text text-transparent mb-6"
+              className="text-6xl md:text-7xl font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent mb-6"
             >
-              <span className="bg-gradient-to-r from-blue-600 to-gray-600 bg-clip-text text-transparent">
-                AeroOps AI
-              </span>
+              AeroOps AI
             </motion.h1>
           </motion.div>
 
@@ -240,7 +242,7 @@ export default function HomePage() {
           >
             <Link
               href="/query"
-              className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-gray-600 text-white font-semibold rounded-full shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+              className="group glass-button px-8 py-4 text-gray-800 font-semibold rounded-full transition-all duration-300 transform hover:scale-105 hover:text-gray-900"
             >
               <span className="flex items-center justify-center">
                 <Plane className="mr-2 h-5 w-5" />
@@ -250,7 +252,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/chatbot"
-              className="px-8 py-4 border-2 border-gray-300 text-gray-700 font-semibold rounded-full hover:border-gray-900 hover:text-gray-900 transition-all duration-300 transform hover:scale-105"
+              className="glass-card px-8 py-4 text-gray-800 font-semibold rounded-full hover:scale-105 transition-all duration-300"
             >
               Talk to AeroOps
             </Link>
@@ -292,7 +294,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent mb-4">
               Powered by Real Performance
             </h2>
             <p className="text-xl text-gray-600">
@@ -314,11 +316,11 @@ export default function HomePage() {
                 >
                   <motion.div
                     whileHover={{ scale: 1.1 }}
-                    className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-gray-600 rounded-full mb-4 shadow-lg group-hover:shadow-2xl transition-all duration-300"
+                    className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 via-slate-700 to-gray-700 rounded-full mb-4 shadow-lg group-hover:shadow-2xl transition-all duration-300"
                   >
                     <Icon className="h-8 w-8 text-white" />
                   </motion.div>
-                  <div className="text-3xl font-bold text-gray-900 mb-2">
+                  <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent mb-2">
                     <AnimatedCounter value={stat.value} />
                     {stat.suffix && <span>{stat.suffix}</span>}
                   </div>
@@ -345,7 +347,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent mb-4">
               Comprehensive AI Solutions
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
@@ -367,15 +369,15 @@ export default function HomePage() {
                   className="group"
                 >
                   <Link href={feature.href}>
-                    <div className="h-full bg-white/80 backdrop-blur-sm rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200/50 hover:border-white relative overflow-hidden">
+                    <div className="h-full glass-card hover-glass rounded-3xl p-8 relative overflow-hidden">
                       {/* Gradient Background on Hover */}
-                      <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+                      <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
                       
                       <div className="relative z-10">
                         <motion.div
                           whileHover={{ scale: 1.1, rotate: 5 }}
                           transition={{ type: "spring", stiffness: 300 }}
-                          className={`inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br ${feature.gradient} rounded-xl mb-6 shadow-lg`}
+                          className={`inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br ${feature.gradient} rounded-2xl mb-6 shadow-lg`}
                         >
                           <Icon className="h-7 w-7 text-white" />
                         </motion.div>
@@ -387,7 +389,7 @@ export default function HomePage() {
                           {feature.description}
                         </p>
                         
-                        <div className="flex items-center text-gray-700 font-semibold group-hover:text-gray-900 transition-colors">
+                        <div className="flex items-center text-blue-600 font-semibold group-hover:text-slate-600 transition-colors">
                           Explore
                           <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-2 transition-transform duration-300" />
                         </div>
@@ -411,7 +413,7 @@ export default function HomePage() {
       >
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
-            className="bg-gradient-to-br from-blue-600 via-gray-600 to-slate-700 rounded-3xl p-12 shadow-2xl relative overflow-hidden"
+            className="glass-liquid rounded-3xl p-12 relative overflow-hidden"
             whileHover={{ scale: 1.02 }}
             transition={{ type: "spring", stiffness: 300 }}
           >
@@ -420,33 +422,33 @@ export default function HomePage() {
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                className="absolute -top-10 -right-10 w-32 h-32 border border-white/20 rounded-full"
+                className="absolute -top-10 -right-10 w-32 h-32 border border-blue-300/20 rounded-full liquid-blob"
               />
               <motion.div
                 animate={{ rotate: -360 }}
                 transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-                className="absolute -bottom-10 -left-10 w-40 h-40 border border-white/10 rounded-full"
+                className="absolute -bottom-10 -left-10 w-40 h-40 border border-slate-300/10 rounded-full liquid-blob"
               />
             </div>
 
             <div className="relative z-10">
-              <h2 className="text-4xl font-bold text-white mb-6">
+              <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent mb-6">
                 Ready to Transform Your Operations?
               </h2>
-              <p className="text-xl text-white/90 mb-8 leading-relaxed">
+              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
                 Join the future of flight operations with AI-powered intelligence that never sleeps.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   href="/query"
-                  className="px-8 py-4 bg-white text-blue-600 font-semibold rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:bg-gray-50"
+                  className="px-8 py-4 glass-button text-gray-800 font-semibold rounded-full transition-all duration-300 transform hover:scale-105"
                 >
                   Start Your First Query
                 </Link>
                 <Link
                   href="/data"
-                  className="px-8 py-4 border-2 border-white/30 text-white font-semibold rounded-full hover:bg-white/10 transition-all duration-300 transform hover:scale-105"
+                  className="px-8 py-4 glass-card text-gray-800 font-semibold rounded-full hover:scale-105 transition-all duration-300"
                 >
                   Explore Demo Data
                 </Link>

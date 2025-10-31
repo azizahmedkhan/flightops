@@ -33,7 +33,7 @@ export default function AnimatedFlightPaths() {
   }, [])
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
       <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         <defs>
           <linearGradient id="flightGradient" x1="0%" y1="0%" x2="100%" y2="100%">

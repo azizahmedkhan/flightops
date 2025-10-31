@@ -6,31 +6,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Helvetica+Neue:wght@400;600&family=Roboto:wght@400;500&display=swap');
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @layer base {
   :root {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 96%;
-    --card: 222 47% 6%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 47% 6%;
-    --popover-foreground: 210 40% 96%;
+    --background: 240 20% 98%;
+    --foreground: 240 10% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 4%;
     --primary: 199 89% 56%;
-    --primary-foreground: 210 40% 100%;
-    --secondary: 199 64% 20%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 19% 75%;
+    --primary-foreground: 240 20% 98%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
     --accent: 198 74% 42%;
-    --accent-foreground: 210 40% 98%;
+    --accent-foreground: 240 6% 10%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 210 36% 22%;
-    --input: 210 36% 22%;
-    --ring: 198 74% 42%;
-    --radius: 0.9rem;
+    --destructive-foreground: 240 20% 98%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 199 89% 56%;
+    --radius: 1.5rem;
   }
 
   * {
@@ -38,7 +38,7 @@
   }
 
   body {
-    @apply min-h-screen bg-slate-950 font-sans text-slate-100 antialiased;
+    @apply min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-gray-50 font-sans antialiased;
   }
 
   h1,
@@ -51,7 +51,7 @@
   }
 
   a {
-    @apply text-sky-300 transition-colors hover:text-white;
+    @apply text-blue-600 transition-colors hover:text-blue-700;
   }
 }
 
@@ -131,4 +131,100 @@
   100% {
     background-position: 200% 0;
   }
+}
+
+/* Liquid Glass Morphism Effects */
+.glass-liquid {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08),
+              0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.glass-header {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.5) inset,
+              0 -1px 20px 0 rgba(0, 0, 0, 0.05);
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15),
+              0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.2),
+              0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+  transform: translateY(-2px);
+}
+
+/* Liquid Gradient Backgrounds */
+.gradient-liquid-1 {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.08) 0%,
+    rgba(100, 116, 139, 0.08) 50%,
+    rgba(71, 85, 105, 0.08) 100%
+  );
+}
+
+.gradient-liquid-2 {
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.12) 0%,
+    rgba(100, 116, 139, 0.12) 50%,
+    rgba(71, 85, 105, 0.12) 100%
+  );
+}
+
+/* Floating liquid blobs */
+@keyframes float-liquid {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+  33% {
+    transform: translate(30px, -30px) scale(1.1);
+    border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+    border-radius: 70% 30% 50% 50% / 30% 30% 70% 70%;
+  }
+}
+
+.liquid-blob {
+  animation: float-liquid 20s ease-in-out infinite;
+}
+
+/* Glass morphism hover effect */
+.hover-glass {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-glass:hover {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.12),
+              0 0 0 1px rgba(255, 255, 255, 0.7) inset;
 }
