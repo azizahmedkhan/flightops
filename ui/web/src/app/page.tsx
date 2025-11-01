@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import LLMTestComponent from './components/LLMTestComponent'
 import AnimatedFlightPaths from './components/AnimatedFlightPaths'
+import OperationsDashboard from './components/OperationsDashboard'
+import AeroOpsLogo from './components/AeroOpsLogo'
 
 // Animated Counter Component
 function AnimatedCounter({ value, duration = 2000 }: { value: number; duration?: number }) {
@@ -209,9 +211,9 @@ export default function HomePage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.2, duration: 0.6, type: "spring" }}
-              className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-600 via-slate-700 to-gray-700 rounded-3xl mb-8 shadow-2xl"
+              className="inline-flex items-center justify-center mb-8"
             >
-              <Zap className="h-10 w-10 text-white" />
+              <AeroOpsLogo size={80} variant="icon" />
             </motion.div>
             
             <motion.h1
@@ -278,6 +280,19 @@ export default function HomePage() {
               </motion.div>
             ))}
           </motion.div>
+        </div>
+      </motion.section>
+
+      {/* Operations Dashboard Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+        className="py-20 px-4 sm:px-6 lg:px-8 relative"
+      >
+        <div className="max-w-6xl mx-auto">
+          <OperationsDashboard />
         </div>
       </motion.section>
 

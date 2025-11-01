@@ -3,10 +3,28 @@ import Link from 'next/link'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import LLMMessageDisplay from './components/LLMMessageDisplay'
+import AeroOpsLogo from './components/AeroOpsLogo'
 
 export const metadata: Metadata = {
   title: 'AiAir AeroOps',
-  description: 'AiAir Flight Operations Management System',
+  description: 'AiAir Flight Operations Management System - One Chat. All Operations.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/aeroops-logo-icon.svg', type: 'image/svg+xml', sizes: '48x48' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.svg', type: 'image/svg+xml', sizes: '180x180' },
+    ],
+  },
+  manifest: '/manifest.json',
+  themeColor: '#2563EB',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=5',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'AeroOps',
+  },
 }
 
 export default function RootLayout({
@@ -42,10 +60,8 @@ export default function RootLayout({
           <header className="glass-header sticky top-0 z-30">
             <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
               <Link href="/" className="flex items-center space-x-3 group">
-                <div className="bg-gradient-to-br from-blue-600 to-slate-700 p-2 rounded-2xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                <div className="group-hover:scale-105 transition-transform duration-300">
+                  <AeroOpsLogo size={40} variant="icon" />
                 </div>
                 <span className="text-lg font-bold bg-gradient-to-r from-blue-600 via-slate-600 to-gray-700 bg-clip-text text-transparent">
                   AiAir AeroOps
